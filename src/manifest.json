@@ -1,0 +1,273 @@
+{
+  "generator": "tools/split_source.py",
+  "version": "2.9.1",
+  "note": "切片为逐字节内容，按 chunks 顺序拼接即为发布版脚本",
+  "sha256": "7c71f55627fd767826e3eb3228e550966fe6c5d49bb68e69273feb37b44fda60",
+  "chunks": [
+    {
+      "file": "_prelude.js",
+      "chars": 1408,
+      "sha256": "e8be59ba401bf86999518f83d3b579f2fe491f7ed0c380c7fe179cc84b10ca5a"
+    },
+    {
+      "file": "index.js",
+      "chars": 481,
+      "sha256": "87205f1cbae20412139f27a35c61094b2da6925717f24cf2f0bfbca86b17d755"
+    },
+    {
+      "file": "core/utils.js",
+      "chars": 5704,
+      "sha256": "1eaa897baf1e05d54ed1b6578b959d82d11f35d9232b5005dfa1b84f57f42894"
+    },
+    {
+      "file": "host/bridge.js",
+      "chars": 19650,
+      "sha256": "016313c80cfe7cf97dcc6397b353a7f2e2a593dd26e01a413e68d412994b6d63"
+    },
+    {
+      "file": "content/kusogaki.json.js",
+      "chars": 37344,
+      "sha256": "018e4410b6eb54b783029876f4d677c51f8c64aba9353dc320c55a88368b4b2c"
+    },
+    {
+      "file": "content/kusogaki-personas.json.js",
+      "chars": 15958,
+      "sha256": "570b36d1be8acefaa13e37304ff273d1df5c2601d2fad6097f1d45a7ba0f9bf8"
+    },
+    {
+      "file": "services/baibai-bridge.js",
+      "chars": 53984,
+      "sha256": "5ee5e20a12b39564a4249116f01aa53deb9b4caf31896b00d28b8f6519a9afac"
+    },
+    {
+      "file": "services/context.js",
+      "chars": 10810,
+      "sha256": "a78b46b7851ff43101f836729d6394bfcbd49ac2be1b21195204d831941aeac0"
+    },
+    {
+      "file": "arc/core.js",
+      "chars": 24555,
+      "sha256": "9ff9181c77f3529e2783d521071a3220255afea411ae3c0e7c8beddc11cd091c"
+    },
+    {
+      "file": "core/contacts.js",
+      "chars": 7659,
+      "sha256": "1d8e4b279ddb4d74269e5642e699663cf216ecd2edc304f0e2545529d7f9d52f"
+    },
+    {
+      "file": "core/model.js",
+      "chars": 15820,
+      "sha256": "28b6fe89ee77d0b1548d2c308040c409adf589b983fc5e926aac4f15d96d75e3"
+    },
+    {
+      "file": "content/catalog.js",
+      "chars": 7955,
+      "sha256": "248b2f2c2138f00ca4dffc9c484fd3644304a1aa494e247e86ba02b0eff4dfd5"
+    },
+    {
+      "file": "host/demo.js",
+      "chars": 5921,
+      "sha256": "9e36c0c969425caca6e014c56438c98c51b5537e09f647cc10ddfa6c993e41bb"
+    },
+    {
+      "file": "core/repository.js",
+      "chars": 11244,
+      "sha256": "bb8b965a4568c2546cbde43f804e5184aa24edd9affae80d7c9c1e381d0b29c8"
+    },
+    {
+      "file": "core/settings.js",
+      "chars": 10664,
+      "sha256": "773c9d744baefa898d739610b886afc518ef4fd7b0d5d8687da467759787d448"
+    },
+    {
+      "file": "core/media.js",
+      "chars": 4219,
+      "sha256": "5bdd5d9c5aa2bdf71819c2886f8b3ec9beb4799eacafc1dcfbd555f0434bc886"
+    },
+    {
+      "file": "services/runner.js",
+      "chars": 4491,
+      "sha256": "dc66522a9bb95f6a1a0bb58c177415dd4df3920da7947f42dbd65517b61585a9"
+    },
+    {
+      "file": "services/demo-responses.js",
+      "chars": 5155,
+      "sha256": "6797ef4d4467ba60d27f056366e654fceb82eac5c2d01cf26acea19ae67ba962"
+    },
+    {
+      "file": "services/api-router.js",
+      "chars": 7407,
+      "sha256": "5092310244e65eea0f1e4115d79ccf64631adc95a13c398cd7d36f6eebbac573"
+    },
+    {
+      "file": "content/kusogaki-extra.js",
+      "chars": 9834,
+      "sha256": "f735b10b339903ac3a70f1629bf4b094d22aee526d145a5cc34b8463374a27f2"
+    },
+    {
+      "file": "services/memory-sync.js",
+      "chars": 9034,
+      "sha256": "c0f400001da9d16bac262b9487116a95376628045b0fa3c72eecd1fd8b9e207b"
+    },
+    {
+      "file": "services/contracts.js",
+      "chars": 9406,
+      "sha256": "8a542caa8d573d290b5ea2da30aa55275458dc1609c5d98c6564fb4b81672ec4"
+    },
+    {
+      "file": "services/focus.js",
+      "chars": 3371,
+      "sha256": "eb7ddd5388d482149c9df4b29ee257b438b8111156c71270a33f976d1107bf92"
+    },
+    {
+      "file": "services/actions.js",
+      "chars": 30280,
+      "sha256": "d28cae475ae9f222a3ab9b825b115308b85604b99f54cf1f94dcecdaeb7f6f9b"
+    },
+    {
+      "file": "services/scheduler.js",
+      "chars": 7106,
+      "sha256": "16859044545de989632130298cfd10bb9f016595230f48466d0f6509305d770d"
+    },
+    {
+      "file": "services/legacy.js",
+      "chars": 5453,
+      "sha256": "245ab6b0d83841de7724bc64d1e03c6c716ed3b370b3bfd6590b00cf27fa37a5"
+    },
+    {
+      "file": "arc/engine.js",
+      "chars": 14878,
+      "sha256": "4886a16fd048c729eaf8aa8b8a1bac03b2475a660145bfcd5f90771042c02541"
+    },
+    {
+      "file": "services/memory-book.js",
+      "chars": 13882,
+      "sha256": "94856c3ad90ce1f5007c999811ed135a9e5e7b04c1f153b5300f1b1ec51ac78a"
+    },
+    {
+      "file": "core/engine.js",
+      "chars": 24,
+      "sha256": "c71a323423c961bf338d7584b4401df442584525ce1408f2f13536342aa2818d"
+    },
+    {
+      "file": "avs/visual.js",
+      "chars": 355814,
+      "sha256": "ef48f7723b13a38e485fa49aae147a6165c3b851ec8f67b3d3fa3f622fb10722"
+    },
+    {
+      "file": "studio/core.js",
+      "chars": 18730,
+      "sha256": "49dcc82774ed418602622c112a76832297f0255caaf9f407524c1cb747c1792c"
+    },
+    {
+      "file": "studio/ui.js",
+      "chars": 18961,
+      "sha256": "fdbfc76e51cd9cca2655886719a8ab49e3978070c4107d03e12926aec9b8d7f6"
+    },
+    {
+      "file": "center/core.js",
+      "chars": 15599,
+      "sha256": "11a42312f296d02b4c339e8841ec3494004e74a154bb5d8328d69586572d40ee"
+    },
+    {
+      "file": "center/ui.js",
+      "chars": 38299,
+      "sha256": "4654a4ca916f15f47f55f651aca0b95e2a69cdfe4b509d64254e13e413be79bd"
+    },
+    {
+      "file": "services/soul.js",
+      "chars": 28866,
+      "sha256": "a419fe7261df7e449c3936948a2247f7d5c3ea9c70a8e0115726877e4914aa8a"
+    },
+    {
+      "file": "services/memory-studio.js",
+      "chars": 49952,
+      "sha256": "815f1fcd11093cabb0919fc9b6686dceb336e1f024892453018c019e1d768619"
+    },
+    {
+      "file": "services/memory-api.js",
+      "chars": 10997,
+      "sha256": "fc729321e0b3d11af3d98c65d41839b32ed0e61d1212d20d08e6297417a2e9fb"
+    },
+    {
+      "file": "services/soullink-bridge.js",
+      "chars": 27383,
+      "sha256": "ae5d6fa88b232b0c651a3b158834713de0594334db1f1a94d2f451139d0809c9"
+    },
+    {
+      "file": "ui/style.css.js",
+      "chars": 40296,
+      "sha256": "77d71ef451de7c14c2f0a4847c7f89e940a9bfc5f24c0a1dbf2ccf7d1049d1f7"
+    },
+    {
+      "file": "ui/icons.js",
+      "chars": 4150,
+      "sha256": "b9d0b4e7365883bb3e8d06bcaf8cb5f7a50373e7ef7de04336b60c44a739e079"
+    },
+    {
+      "file": "ui/helpers.js",
+      "chars": 3696,
+      "sha256": "8d6830debef73c2b452b3092939fe55baf71f9a715a2d74a6e6276fddf96a2d8"
+    },
+    {
+      "file": "ui/views-social.js",
+      "chars": 9639,
+      "sha256": "f272daeb3fd290fb34ed49bbf0f265f3ff4968216b3a895ed66b1934c20629fc"
+    },
+    {
+      "file": "ui/pick.js",
+      "chars": 1761,
+      "sha256": "a2f8454490c5b0e803ec40366da5a96e2a113ad51029b33d88a9c708ec538ecb"
+    },
+    {
+      "file": "services/backup.js",
+      "chars": 3357,
+      "sha256": "f5c4ef59fddbf3899f2cfd090a5c5277e73da277b231a8ca5b6d108e5bf81f35"
+    },
+    {
+      "file": "ui/commands.js",
+      "chars": 136654,
+      "sha256": "1cced750085149ee448e7d05f28e9a75fae2fb69fd1f38419a67726ce28aeab4"
+    },
+    {
+      "file": "arc/ui.js",
+      "chars": 25163,
+      "sha256": "cd72c1c0d7ba0ff72f59a4255fb69f4a4325592d799e98356bdb81a2b3650ce2"
+    },
+    {
+      "file": "ui/views-planner.js",
+      "chars": 13141,
+      "sha256": "d295a17f3cd3a8b4756e7eae3bea5293fb9dcdc0adeed987dc50ec36b431026e"
+    },
+    {
+      "file": "ui/views-memory-studio.js",
+      "chars": 13733,
+      "sha256": "23e448c184ca139e071294116e44cadbce6bcf3fec4e548cd0f261019ee056c2"
+    },
+    {
+      "file": "ui/views-memory-api.js",
+      "chars": 2507,
+      "sha256": "4a262afd05ae9eef70f7368db1b487eaca36b028bbfd921fd79974a79ed3f77e"
+    },
+    {
+      "file": "ui/views-life.js",
+      "chars": 11824,
+      "sha256": "c4a23dcd4c8d5af9baef399833028d0cfb6c9d9b95aa592b6ea490489f7c1b4a"
+    },
+    {
+      "file": "ui/views-settings.js",
+      "chars": 26765,
+      "sha256": "81c2b585305c1f769a118fc3793970e141de618841296c0b9074f1bac79a2c82"
+    },
+    {
+      "file": "ui/renderer.js",
+      "chars": 35271,
+      "sha256": "d0c208b9f48e186627e46bcc29aeb47f56695c74433e77997efbae97dda366ab"
+    },
+    {
+      "file": "index-2.js",
+      "chars": 6712,
+      "sha256": "62f9dcc01e91245eb09f85daedce93f083c1c4088aa439dcb243018abada7f32"
+    }
+  ]
+}

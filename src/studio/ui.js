@@ -9,16 +9,16 @@
       <div class="buttons">${button("上一页","st-rule-page",String(Math.max(0,page-1)))}${button("下一页","st-rule-page",String(Math.min(Math.max(0,Math.ceil(all.length/12)-1),page+1)))}${button("恢复全部默认","st-rule-reset-all")}</div></div>`;
   }
   function studioWho(s,id2){return s.contacts.find(c=>c.id===id2)?.name||"已移除人物";}
-  function studioView(ui) {
+  function studioPanelView(ui) {
     const eng=ui.engine,s=ui.data,st=studioData(s),snap=ui.snapshot,tab=ui.studioTab||"events";
     let body="";
     if(tab==="events"){
-      const a=st.active,valid=studioValid(a,snap);
+      const a=st.active,valid=studioValid(a,snap)&&centerLinkValid(s,a?.event);
       body=`${hint("事件池一次生成、分阶段使用；只向主模型提供当前钩子，不泄露后续阶段或后台备注。没有自动连环调用，候选不等于已发生。")}
         <div class="buttons">${button("生成候选池 · 1次API","st-generate","director")}${button("手写事件","st-event-new")}${button("按概率抽取","st-roll")}${button("导演注入："+(st.config.directorInject?"开":"关"),"st-toggle","directorInject")}</div>
         <p>触发概率 ${st.config.probability}% · 冷却 ${st.config.cooldown} 条消息；每个正文前缀最多抽一次。候选有效期40条消息。</p>
-        ${a?`<div class="card"><h3>${e(a.event.title)} · ${a.index+1}/${a.event.stages.length}</h3>${!valid?hint("来源分支已失效：当前不注入，请取消后重建",true):""}<p>${e(a.event.stages[a.index].hook)}</p><small>推进依据：${e(a.event.stages[a.index].condition||"由你核对实际正文")}</small><div class="buttons">${button(a.index+1===a.event.stages.length?"确认已收束":"核实正文后下一阶段","st-next")}${button("取消当前事件","st-event-stop")}</div><details><summary>作者后台（剧透）</summary><p>${e(a.event.secret||"无")}</p>${a.event.stages.map((t,i)=>`<p>${i+1}. ${e(t.hook)}</p>`).join("")}</details></div>`:empty("没有执行中的事件","可以先查看候选，再选择启用；抽取未命中也不会改写剧情。","compass")}
-        ${[...st.pool].reverse().map(r=>`<details class="card"><summary>${e(r.title)} · ${e(r.status)}${studioValid(r,snap)?"":" · 旧分支"}</summary><p>权重 ${r.weight} · ${r.stages.length} 阶段</p><p>${e(r.secret)}</p>${r.stages.map((t,i)=>`<p>${i+1}. ${e(t.hook)}<br><small>${e(t.condition)}</small></p>`).join("")}<div class="buttons">${r.status==="candidate"?button("启用此事件","st-event-start",r.id):""}${button("删除候选","st-event-delete",r.id)}</div></details>`).join("")}`;
+        ${a?`<div class="card"><h3>${e(a.event.title)} · ${a.index+1}/${a.event.stages.length}</h3>${!valid?hint("来源分支或关联规划已变化：当前不注入，请取消后重建",true):""}<p>${e(a.event.stages[a.index].hook)}</p><small>推进依据：${e(a.event.stages[a.index].condition||"由你核对实际正文")}</small><div class="buttons">${button(a.index+1===a.event.stages.length?"确认已收束":"核实正文后下一阶段","st-next")}${button("取消当前事件","st-event-stop")}</div><details><summary>作者后台（剧透）</summary><p>${e(a.event.secret||"无")}</p>${a.event.stages.map((t,i)=>`<p>${i+1}. ${e(t.hook)}</p>`).join("")}</details></div>`:empty("没有执行中的事件","可以先查看候选，再选择启用；抽取未命中也不会改写剧情。","compass")}
+        ${[...st.pool].reverse().map(r=>`<details class="card"><summary>${e(r.title)} · ${e(r.status)}${studioValid(r,snap)&&centerLinkValid(s,r)?"":" · 来源已变"}</summary><p>权重 ${r.weight} · ${r.stages.length} 阶段</p><p>${e(r.secret)}</p>${r.stages.map((t,i)=>`<p>${i+1}. ${e(t.hook)}<br><small>${e(t.condition)}</small></p>`).join("")}<div class="buttons">${r.status==="candidate"?button("启用此事件","st-event-start",r.id):""}${centerEventLinkButton(r)}${button("删除候选","st-event-delete",r.id)}</div></details>`).join("")}`;
     } else if(tab==="parallel"){
       const eligible=new Set(studioEligible(s,snap).map(r=>r.id));
       body=`${hint("借鉴众生侧写：仅本轮明确确认离场的人可生成，现场/被正文点名者保守跳过。确认离场随新正文失效；未知不当作离场。每次最多3人、1次API，无自动补漏。")}
@@ -40,9 +40,9 @@
         <p>正文输入 ${st.config.context?"开":"关"} · 人物资料 ${st.config.contacts?"开":"关"} · 本人亲历记忆 ${st.config.memories?"开":"关"}</p><p>世界补充：${e(st.config.notes||"无")}</p><p>侧写不会收到主角正文、全局私聊或未授权记忆；多人同一模型批次仍需要你审核是否串人。</p>
         <details class="card"><summary>近期操作记录</summary>${st.logs.slice().reverse().map(r=>`<p>${e(new Date(r.at).toLocaleString())} · ${e(r.message)}</p>`).join("")}</details>`;
     }
-    return `<div class="pad"><div class="overline">STORY STUDIO · 2.5</div><h2>剧情工作台</h2><div class="buttons">${[["events","事件导演"],["parallel","众生侧写"],["world","世界状态"],["memories","亲历记忆"],["settings","输入与日志"]].map(([k,label])=>button(label,"st-tab",k,tab===k?"primary":"")).join("")}${button("原点线面规划","go","planner")}</div>${eng.studio.status?hint(eng.studio.status):""}${body}</div>`;
+    return body;
   }
-  async function studioAction(ui,action,value) {
+  async function studioActionLegacy(ui,action,value) {
     const eng=ui.engine,origin=eng.bridge.capture(),initial=fingerprint(studioData(ui.data)),st=studioData(ui.data);
     assert(eng.repo.snapshot?.owner===origin.owner && eng.repo.snapshot?.signature===origin.signature,"聊天/正文正在刷新，请稍后再操作");
     const valid=()=>{try{return eng.bridge.same(origin)&&eng.bridge.capture().signature===origin.signature;}catch{return false;}};
@@ -83,12 +83,12 @@
       if(r)await save((s,x)=>{x.config={...x.config,probability:Math.round(clamp(r.probability,0,100,25)),cooldown:Math.round(clamp(r.cooldown,0,30,2)),context:!!r.context,contacts:!!r.contacts,memories:!!r.memories,notes:studioText(r.notes,4000)};},"修改工作台输入");
     } else if(action==="st-toggle"){
       assert(["directorInject","worldInject","memoryInject"].includes(value),"未知开关");
-      if(st.config[value]||await confirm("开启正文参考注入","资料将发送给正文模型；事件只注入当前阶段，场外状态与私有记忆不可被所有角色自动知晓。导演生效时暂停旧点线面自动规划和规划注入。"))await save((s,x)=>{x.config[value]=!x.config[value];},"切换工作台注入");
+      if(st.config[value]||await confirm("开启正文参考注入","资料将发送给正文模型；事件只注入当前阶段，场外状态与私有记忆不可被所有角色自动知晓。导演生效时大纲重建/游标判定暂缓，仅保护关联线/点；保留长期方向与其他规划。"))await save((s,x)=>{x.config[value]=!x.config[value];},"切换工作台注入");
     } else if(action==="st-event-new"){
       const r=await dialog("手写候选事件",field("标题","title","",{required:true,max:100})+field("阶段钩子：每行一个（1—6行）","stages","",{required:true,textarea:true,max:6000})+field("后台备忘（不注入正文）","secret","",{textarea:true,max:1800})+field("抽取权重 1—100","weight",10,{type:"number"}));
-      if(r){const ev=studioCheckEvent({id:id("event"),title:studioText(r.title,100),secret:studioText(r.secret,1800),weight:Math.round(clamp(r.weight,1,100,10)),status:"candidate",stages:String(r.stages).split("\n").map(x=>x.trim()).filter(Boolean).map(hook=>({hook,condition:"由玩家核实当前阶段已在正文发生"})),...studioStamp(origin)});await save((s,x)=>{assert(x.pool.length<40,"事件池已满");x.pool.push(ev);},"新增候选事件");}
+      if(r){const ev=studioCheckEvent({id:id("event"),title:studioText(r.title,100),secret:studioText(r.secret,1800),weight:Math.round(clamp(r.weight,1,100,10)),status:"candidate",stages:String(r.stages).split("\n").map(x=>x.trim()).filter(Boolean).map(hook=>({hook,condition:"由玩家核实当前阶段已在正文发生"})),...studioStamp(origin)});await save((s,x)=>{assert(x.pool.length<40,"事件池已满");if(centerData(s).focus)centerBind(s,ev,centerData(s).focus);x.pool.push(ev);},"新增候选事件");}
     } else if(action==="st-roll"){
-      let result;await save((s,x)=>{result=studioSelect(x,origin,()=>studioRandom(eng.win));studioLog(x,result.repeat?"本轮已抽取，不重复掷骰":result.cooldown?"事件尚在冷却":result.eventId?"抽中候选，等待正文演绎":"本轮未抽中事件");},"事件抽取");
+      let result;await save((s,x)=>{result=studioSelect(x,origin,()=>studioRandom(eng.win),s);studioLog(x,result.repeat?"本轮已抽取，不重复掷骰":result.cooldown?"事件尚在冷却":result.eventId?"抽中候选，等待正文演绎":"本轮未抽中事件");},"事件抽取");
       eng.studio.status=result.repeat?"同一正文前缀已经抽过，不重新抽取。":result.cooldown?"尚在冷却。":result.eventId?"已选定事件；开启导演注入后才能影响正文。":"本轮未触发事件。";
     } else if(action==="st-event-start"){
       const ev=st.pool.find(r=>r.id===value);assert(ev&&ev.status==="candidate"&&studioValid(ev,origin),"候选不存在/已使用/分支失效");
@@ -123,6 +123,7 @@
     else if(action==="st-clean"){
       if(await confirm("清理已处理草稿","只删除已收藏/已核准草稿，待审核草稿和正式世界状态、记忆不动。请先导出需要保留的侧写。"))await save((s,x)=>{x.drafts=x.drafts.filter(r=>r.status==="pending");},"清理已处理草稿");
     } else if(action==="st-export")download(ui,"剧情工作台-v2.5.json",{format:"tsukiyo-studio-1",owner:origin.owner,studio:st,notice:"含作者后台与私有记忆，请勿公开；恢复使用手机完整备份。"});
-    if(eng.settings.isEnabled("director") && studioDirectorOn(eng.repo.data,eng.repo.snapshot))eng.runner.cancel("事件导演生效，旧规划让行",{module:"planner"});
+    // Planner writes use source/lock guards instead of cancelling every planning task.
     eng.updatePrompt();ui.render();
   }
+

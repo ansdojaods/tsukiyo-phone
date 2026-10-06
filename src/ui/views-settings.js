@@ -1,0 +1,134 @@
+  // src/ui/views-settings.js
+  function bookView(ui) {
+    const studio = ui.engine.bookStudio, b = studio.info();
+    if (!b.supported) return `<div class="pad">${hint("世界书工坊需要酒馆助手的世界书接口（getWorldbook / createWorldbook / updateWorldbookWith）。当前环境没有检测到；手机数据仍照常保存在手机里。", true)}${section("可以做什么", `<p class="tiny muted">连接一本世界书后，手机里的日记、恋爱心迹、摘要、人物档案（NPC 性格与资料）、约定、备忘与清单都可以作为条目写进世界书：关键词由人物名与日期自动生成，条目可以在酒馆里直接改，改完手机也能取回。</p>`)}</div>`;
+    if (!b.linked) {
+      return `<div class="pad"><div class="card book-card"><h3>世界书工坊</h3><p class="tiny muted">把手机数据同步成一本独立世界书（默认「角色卡名-小手机世界书」）。与「记忆世界书」互不冲突：记忆条目仍由记忆模块负责，这里负责日记、心迹、摘要、人物档案、约定、备忘与清单。</p><div class="buttons">${button(icon("book", 14) + " 创建并同步", "book-create", "", "primary")}${button(icon("file", 14) + " 预览将要写入的条目", "book-preview")}</div></div>${section("当前可写入的内容", `<div class="card">${Object.entries(BOOK_SOURCES).map(([id2, label]) => `<p class="tiny muted" style="margin:4px 0">${e(label)} · <b>${b.counts?.[id2] || 0}</b> 条</p>`).join("")}<p class="form-note">写入是可选的：每类数据都能单独开关；人物档案默认只写回、不覆盖手机。</p></div>`)}</div>`;
+    }
+    const rows = Object.entries(BOOK_SOURCES).map(([id2, label]) => switchRow(label + "（" + (b.counts?.[id2] || 0) + " 条）", id2 === "persona" ? "写进世界书可让正文更容易提到 ta 的性格与经历；世界书里改了会作为“世界书同步”资料回到人物页" : "条目名以「" + (b.prefix || "【小手机】") + "」开头，关键词自动带人物名与日期", "book-src", !!(b.counts?.sources?.[id2] ?? true) && (studio.cfg?.sources?.[id2] !== false), id2)).join("");
+    const st = b.stats;
+    return `<div class="pad">
+      <div class="card book-card"><div class="row-top"><h3>${e(b.name)}</h3><span>${tag(b.scope === "chat" ? "仅本聊天" : "整张角色卡共用", "gold")} ${tag(b.bound ? "已绑定" : "未绑定", b.bound ? "" : "rose")}</span></div>
+        <p class="tiny muted">可写条目 ${b.counts?.total || 0} 条 · 上次 ${e(clock(b.lastSyncAt))}${b.phase === "syncing" ? " · 正在同步…" : ""}</p>
+        ${st ? `<p class="tiny muted">上次结果：新增 ${st.created} · 更新 ${st.updated} · 取回 ${st.pulled} · 删除 ${st.deleted}${st.conflicts ? " · 冲突 " + st.conflicts : ""}${st.skipped ? " · 跳过 " + st.skipped : ""}</p>` : ""}
+        ${b.lastError ? hint(b.lastError, true) : ""}
+        ${b.confirm ? `<div class="hint warning">世界书里有 ${b.confirm.count} 条手机写入的条目被删除或整本被清空。要让手机跟着清空对应的辅助记录（不会删除日记与记忆本身），还是以手机数据重建世界书？</div><div class="buttons">${button("按世界书删掉对应条目", "book-accept-delete", "", "danger")}${button("以手机数据重建", "book-rebuild", "", "primary")}</div>` : ""}
+        <div class="buttons">${button(icon("shuffle", 14) + " 立即同步", "book-sync", "", "primary")}${button("重新绑定", "book-rebind")}${button("以手机重建", "book-rebuild")}<button type="button" class="btn" data-action="book-preview">导出条目预览</button>${button("停止同步", "book-unlink")}</div>
+        ${switchRow("自动同步", "手机数据变了就写进世界书；世界书里改了会取回手机", "book-autosync", b.autoSync)}
+      </div>
+      ${section("要写进世界书的数据", `<div class="card">${rows}</div>`)}
+      ${section("写入细节", `<div class="card"><p class="tiny muted">条目前缀：${e(b.prefix)} · 条目上限：${b.maxEntries} · 世界书改动取回手机：${b.pullBack ? "开" : "关"} · 人物档案常驻：${b.constantPersona ? "开" : "关"}</p><div class="buttons">${button("修改这些选项", "book-options")}${button("清理已停用来源的条目", "book-clean-orphans")}<button type="button" class="btn" data-action="book-preview">导出条目预览</button></div><p class="form-note">条目超过 8000 字会自动跳过并计数。删除保护：世界书里一次性少掉太多条目时会先暂停，等你在上方确认。</p></div>`)}
+      ${hint("世界书是最稳的“跨模型记忆”：绑定到角色卡后，正文模型会按酒馆的触发规则读到这些条目；不需要时逐类关掉即可。")}
+    </div>`;
+  }
+  function soullinkCard(ui) {
+    const sl = ui.engine.soullink, p = sl.prefs();
+    let scan = null;
+    try {
+      scan = sl.scan();
+    } catch (err) {
+      scan = { note: "检测失败：" + (err?.message || err) };
+    }
+    const status = scan?.found ? scan.note : scan?.note || "未检测到";
+    return `<div class="card"><h3 style="margin:0 0 6px">SoulLink 联动（灵魂链接）</h3><p class="tiny muted">${e(status)}</p>${switchRow("启用联动", "检测到 SoulLink（酒馆扩展）时读取其角色档案；本页所有写入都需要你先打开开关", "soullink-toggle", !!p.enabled)}${switchRow("允许把手机记录写回 SoulLink", "把最近的交流、约定、恋爱心迹与日记追加到对应角色的「记忆」分节；不修改其他内容", "soullink-write", !!p.push)}<div class="buttons">${button("检测 / 刷新", "soullink-scan")}${button(icon("download", 14) + " 导入档案到手机", "soullink-pull", "", "primary")}${button(icon("upload", 14) + " 写回 SoulLink", "soullink-push")}</div><div class="buttons">${button("导出 SoulLink 名单（JSON）", "soullink-export")}${button("导入 SoulLink 名单（JSON）", "soullink-import")}</div><p class="form-note">读法：只读取 extensionSettings 里 SoulLink 自己的档案数据（含 archives / roster 的键），不改动它的其它设置；写法：仅在你打开写回开关后，向其「记忆」分节追加带「小手机」标记的短条目，并触发酒馆保存设置。导出 / 导入使用与 SoulLink 概览页相同的 roster JSON，兼容它的「导入」按钮。</p></div>`;
+  }
+
+  function soulCard(ui) {
+    const s = ui.data;
+    if (!s) return "";
+    const soul = ui.engine.soul, v = soulData(s), info = soul.info();
+    const modeLabel = { off: "关闭", manual: "仅手动 / 手机内发送时", barrier: "拦截正文发送按钮" }[v.roleplay?.mode || "manual"];
+    return `<div class="card"><h3 style="margin:0 0 6px">灵魂链接（内置）</h3><p class="tiny muted">给小手机里的每个角色维护一份长期档案（性格 / 世界观 / 家庭背景 / 人际关系 / 记忆），用你自己的 API 方案做增量更新与精编；发送前可为在场角色并发推演内心状态，注入到正文提示里。档案还能一键写成世界书条目（世界书工坊的「灵魂链接档案」）。</p>${switchRow("启用灵魂链接", "存档里保存名单与档案；与外部 SoulLink 扩展可共存，功能重叠时建议只开一边", "soul-toggle", v.enabled)}${info.enabled ? settingLink("打开灵魂链接（" + info.characters + " 人 · " + info.entries + " 条）", "go", "heart", "档案 / 推演 / 名单导入导出", "soul") : ""}<p class="form-note">当前：档案自动维护${v.auto?.enabled ? "开" : "关"} · 角色推演${v.roleplay?.enabled ? "开（" + modeLabel + "）" : "关"}${info.lastError ? " · 上次问题：" + e(info.lastError) : ""}</p></div>`;
+  }
+  function soulRow(ui, row) {
+    const soul = ui.engine.soul, n = soulEntryCount(row);
+    return `<div class="card"><div style="display:flex;align-items:center;gap:10px"><b>${e(row.name)}</b>${row.aliases?.length ? tag(row.aliases.join(" / "), "gold") : ""}${tag(n + " 条")}${row.updatedAt ? tag("更新于 " + autoAgo(row.updatedAt)) : ""}</div><div class="buttons">${button("档案", "go", "soulChar", "primary")}${button("更新档案", "soul-analyze", row.name)}${button("精编", "soul-condense", row.name)}${button("删除", "soul-char-del", row.name, "danger")}</div></div>`;
+  }
+  function soulView(ui) {
+    if (!ui.data) return empty("先打开角色聊天");
+    const soul = ui.engine.soul, s = ui.data, v = soulData(s), info = soul.info();
+    const rows = Object.values(v.roster).sort((a2, b) => (b.updatedAt || 0) - (a2.updatedAt || 0));
+    const history = [...(v.history || [])].reverse().slice(0, 5);
+    const logs = [...(v.log || [])].reverse().slice(0, 10);
+    const head = `<div class="card"><h3 style="margin:0 0 6px">灵魂链接</h3><p class="tiny muted">档案按「聊天」保存在手机存档里（随备份一起走）。每个人各自独立调用一次模型，最多并发 ${v.cfg.concurrency} 个、单个 ${Math.round(v.cfg.timeoutMs / 1000)} 秒超时；每次只把最近 ${v.cfg.contextMessages} 条正文和 ta 自己的档案发给模型。</p>${switchRow("启用灵魂链接", "关闭后不调用、不注入，档案仍保留在存档里", "soul-toggle", v.enabled)}${info.enabled ? `<div class="buttons">${button("更新全部档案", "soul-analyze-all", "", "primary")}${button("推演本轮角色", "soul-roleplay")}${button("清除推演注入", "soul-roleplay-clear")}${button("从通讯录登记角色", "soul-import-contacts")}</div><div class="buttons">${button(icon("download", 14) + " 导出名单", "soul-export")}${button(icon("upload", 14) + " 导入名单", "soul-import")}${button("从已装的 SoulLink 档案导入", "soul-import-extension")}</div><p class="form-note">导出为 SoulLink 同名格式（app/kind/roster），可直接给外部扩展用；导入同样兼容它的 roster / archives / characters 结构。</p>` : ""}</div>`;
+    if (!info.enabled) return `<div class="pad">${head}${hint("启用后，先在下面的名单里登记角色（可从通讯录一键登记）。")}</div>`;
+    const cfgCard = `<form data-form="soul"><div class="card"><h3 style="margin:0 0 6px">调用与推演参数</h3><div class="two-cols">${field("并发上限 1—8", "concurrency", v.cfg.concurrency, { type: "number" })}${field("单个请求超时（秒）5—180", "timeoutSec", Math.round(v.cfg.timeoutMs / 1000), { type: "number" })}${field("上下文条数 1—20", "contextMessages", v.cfg.contextMessages, { type: "number" })}${field("独白字数上限 80—800", "maxChars", v.cfg.maxChars, { type: "number" })}${field("注入深度 0—10", "injectDepth", v.cfg.injectDepth, { type: "number" })}${field("每节条目上限 10—60", "maxEntriesPerSection", v.cfg.maxEntriesPerSection, { type: "number" })}</div><p class="form-note">“注入深度”= 距离最新一条消息的层数：4 表示插在最后 4 条消息附近，越小越靠后（越容易被模型当成最近上下文）。</p><button type="submit" class="btn primary wide">保存参数</button></div></form>`;
+    const autoCard = `<div class="card"><h3 style="margin:0 0 6px">自动维护与推演</h3>${switchRow("自动更新档案", "每次主线新回复结束后，先做预筛，再只更新有变化的角色；计入后台调用预算", "soul-auto-toggle", !!v.auto.enabled)}${switchRow("发送前角色推演", "为在场 / 最近出现的角色并发生成内心独白，注入正文提示（生成结束后自动清除）", "soul-roleplay-toggle", !!v.roleplay.enabled)}<div class="buttons">${button("推演方式：" + ({ off: "关闭", manual: "手动", barrier: "拦截发送按钮" }[v.roleplay?.mode || "manual"]), "soul-mode")}${button("预筛方式：" + (v.auto?.gateMode === "ai" ? "模型预筛" : "本地关键词"), "soul-gate-mode")}</div><p class="form-note">推演方式选「拦截发送按钮」时，点酒馆发送会先等推演完成再放行（最多 ${Math.round(v.cfg.timeoutMs / 1000)} 秒，失败就照常发送）；手机内给角色发消息时也会自动推演。不想被打断就用默认的「手动」。</p></div>`;
+    const presetCard = `<div class="card"><h3 style="margin:0 0 6px">提示词预设</h3>${SOUL_PROMPT_KEYS.map((k) => `<div class="buttons" style="align-items:center">${button(SOUL_PROMPT_LABELS[k] + "：" + e(text(v.presets?.[k] || SOUL_DEFAULT_PROMPTS[k], 24)) + "…", "soul-preset", k)}${v.presets?.[k] !== void 0 ? button("恢复默认", "soul-preset-reset", k) : ""}</div>`).join("")}<div class="buttons">${button("导出提示词", "soul-presets-export")}${button("导入提示词", "soul-presets-import")}</div><p class="form-note">四套提示词可以照自己的口味改；也可以把外部 SoulLink 的预设文本粘进来（这里不复制它的代码与文本，只提供同样的可编辑位）。</p></div>`;
+    const listCard = `<div class="card"><h3 style="margin:0 0 6px">角色名单（${rows.length} 人 · ${info.entries} 条）</h3><div class="buttons">${button("手动添加角色", "soul-add-char", "", "primary")}${button("从通讯录登记", "soul-import-contacts")}</div></div>` + (rows.length ? rows.map((r) => soulRow(ui, r)).join("") : empty("名单还是空的", "从通讯录一键登记，或手动添加角色，然后点「更新档案」让模型读正文开始积累。", "heart"));
+    const histCard = history.length || logs.length ? `<div class="card"><h3 style="margin:0 0 6px">最近推演与日志</h3>${history.map((h) => `<p class="tiny muted" style="margin:6px 0"><b>#${(h.floor ?? 0) + 1}楼</b> · ${e(autoAgo(h.ts))} · ${e((h.actors || []).map((a2) => a2.name).join("、") || "无")}${h.ok === false ? " · 注入未就绪" : ""}</p>${(h.actors || []).map((a2) => `<details class="details"><summary>${e(a2.name)} 的内心独白</summary><p>${e(a2.text)}</p></details>`).join("")}`).join("")}${logs.map((l) => `<p class="tiny muted" style="margin:4px 0">${e(autoAgo(l.ts))} · ${e(l.text)}</p>`).join("")}<div class="buttons">${button("清空日志", "soul-log-clear")}</div></div>` : "";
+    return `<div class="pad">${head}${cfgCard}${autoCard}${listCard}${presetCard}${histCard}${hint("与「记忆模块 / 记忆世界书」的分工：灵魂链接管的是“这个角色本身是谁、记得什么”，记忆模块管的是“发生过的事、尚未了结的约定”。两者可以同时开，但同一段内容不要两边都注入。")}</div>`;
+  }
+  function soulCharView(ui) {
+    const s = ui.data, soul = ui.engine.soul, v = soulData(s), name = ui.route.id;
+    const row = v.roster[name];
+    if (!row) return empty("角色不在名单里", "可能已被删除。", "heart") + button("返回名单", "go", "soul", "primary");
+    const total = soulEntryCount(row);
+    const sections = SOUL_SECTIONS.map((k) => {
+      const rows = row.sections[k] || [];
+      return `<div class="card"><h3 style="margin:0 0 6px">${e(k)}（${rows.length}）</h3>${rows.length ? rows.map((x) => `<div style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><div style="flex:1"><span class="tiny">${e(x.text)}</span><br><small class="muted">${x.floor >= 0 ? "#" + (x.floor + 1) + "楼 · " : ""}${e({ manual: "手写", ai: "AI", phone: "手机记录", import: "导入", condense: "精编" }[x.source] || x.source || "手工")} · ${e(autoAgo(x.ts))}</small></div>${button("删", "soul-entry-del", name + "|" + k + "|" + x.id, "danger")}</div>`).join("") : `<p class="tiny muted">还没有条目。</p>`}</div>`;
+    }).join("");
+    return `<div class="pad"><div class="card"><h3 style="margin:0 0 6px">${e(row.name)}</h3><p class="tiny muted">${row.aliases?.length ? "别名：" + e(row.aliases.join("、")) + " · " : ""}共 ${total} 条 · ${row.updatedAt ? "最近更新 " + e(autoAgo(row.updatedAt)) : "尚未更新"}</p><div class="buttons">${button("更新档案", "soul-analyze", name, "primary")}${button("精编", "soul-condense", name)}${button("合入手机记录", "soul-pull-phone", name)}${button("删除角色", "soul-char-del", name, "danger")}${button("返回名单", "go", "soul")}</div></div><form data-form="soul-entry"><input type="hidden" name="name" value="${e(name)}"><div class="card">${select("写到哪一节", "section", SOUL_SECTIONS.map((k) => [k, k]), "记忆")}${field("新增条目（≤600 字）", "text", "", { textarea: true, max: 600, required: true })}<button type="submit" class="btn primary wide">添加条目</button></div></form>${sections}<div class="buttons">${button("把这人的档案写成世界书条目", "book-preview")}${button("返回名单", "go", "soul")}</div></div>`;
+  }
+
+  function settingsView(ui) {
+    const s = ui.data, c = ui.engine.settings.data, bridge = ui.engine.bridge, bb = ui.engine.baibai ? ui.engine.baibai.status() : null;
+    return `<div class="pad"><div class="card"><div style="display:flex;align-items:center;gap:12px"><span class="avatar sage">${icon("moon", 23)}</span><div><h3 style="margin:0">月夜来信</h3><small>TSUKIYO PHONE · ${VERSION}</small></div></div><div class="divider"></div><p class="tiny muted">${bridge.mode === "demo" ? "当前为离线演示。模拟消息不会写入真实酒馆。" : "手机与当前角色聊天相连；不把界面状态冒充主线事实。"}</p></div><div class="card">${settingLink("API方案与模块分配", "go", "settings", c.profiles.length + " 个方案" + (Object.keys(MODULES).filter((k) => !ui.engine.settings.isEnabled(k)).length ? " · " + Object.keys(MODULES).filter((k) => !ui.engine.settings.isEnabled(k)).length + " 个模块已关闭" : ""), "api")}${switchRow("正文下显示剧情规划条", "在最新一条角色回复下方显示当前面·线·点，可一键打开或推进；状态栏脚本也可读取 __TSUKIYO_PHONE__.plan()", "plan-strip", c.ui.planStrip !== false)}${settingLink("自定义提示词", "edit-prompt", "note", c.prompt?.enabled && c.prompt.text ? "已启用 · 每次请求最先发送" : "未启用")}${settingLink("后台、来信与剧情方向", "go", "bell", s?.settings.auto.enabled ? "已开启" : "未开启", "automation")}${settingLink("备份与恢复", "go", "download", "只操作本手机", "backup")}${settingLink("运行记录", "go", "file", "任务与失败可追踪", "logs")}${settingLink("存档与规划状态", "go", "memory", "三层存档 · 自动推进", "diag")}${settingLink("正文注入检查", "inspect-injection", "memory", bridge.injectionReady ? "接口已就绪" : "尚未确认")}</div><div class="card">${switchRow("夜间阅读", "只改变手机外观，不改变剧情时间", "theme", c.theme === "night")}${s ? switchRow("角色卡人物全部解锁", "月夜来信卡的全部联系人直接可用；关闭后按剧情逐个解锁", "unlock-all", s.settings.unlockAll) : ""}${s ? switchRow("正文记忆联动", "已发生的交流与知情范围写入隐藏参考", "inject", s.settings.inject) : ""}${s ? switchRow("读取可知情的正文", "在场角色/明确允许的联系人可参考近期正文；其他私聊不混入", "read-narrative", s.settings.readNarrative) : ""}</div><div class="card"><h3 style="margin:0 0 6px">柏宝书联动</h3><p class="tiny muted">${e(bb ? bb.text : "不可用")}</p>${switchRow("启用柏宝书联动", "检测到「百宝月夜书」(≥1.3.0) 时双向联动；关闭后手机完全独立运行", "baibai-enabled", !!bb?.prefs.enabled)}${switchRow("使用柏宝书记忆生成（实时读取）", "聊天、主动来信、朋友圈/评论、日记、备忘、清单、日历、规划与记忆整理可参考柏宝书；关闭后不再读取，也不使用带柏宝书标记的导入记忆。公开动态/群聊只取有限本人资料，不公开全局私密摘要", "baibai-brief", !!bb?.prefs.brief)}${switchRow("在场人物兜底", "主线变量没有“当前互动NPC”时，采用柏宝书推断的在场人物", "baibai-present", !!bb?.prefs.present)}${switchRow("手机交流回写柏宝书", "新消息、约定、动态、未完约定推送到柏宝书的【小手机】外部记录，参与其正文注入与摘要；不会改动柏宝书自身的记忆", "baibai-push", !!bb?.prefs.push)}<div class="buttons">${button("立即回写", "baibai-push-now")}${button("导入柏宝书记忆", "baibai-import-memory")}${button("导入柏宝书 API 方案", "baibai-import-api")}${button("经柏宝书测活渠道", "baibai-test")}</div><p class="form-note">只读取柏宝书公开的 window.STBaiBaiBook.phone 接口；柏宝书密钥不经过手机（“导入方案”除外，它会复制一份密钥到本机）。</p></div>${soullinkCard(ui)}${soulCard(ui)}<p class="form-note">独立扩展与卡内脚本二选一即可；同页重复加载会复用实例。后台仅在酒馆页面仍开着时运行，标签页可能受浏览器节流。所有自动生成都计入你设置的调用预算。</p></div>`;
+  }
+  function apiView(ui) {
+    const store = ui.engine.settings, c = store.data;
+    const choices = [["default", "沿用默认方案"], ...c.profiles.map((p) => [p.id, p.name])];
+    return `<div class="pad">${ui.engine.bridge.mode === "demo" ? hint("离线演示：这里展示多方案与路由；连接测试不会验证真实API，请勿填写真实密钥。", true) : hint("每个模块可选独立方案，也可沿用默认。更换某模块不会偷偷更换其他模块的接口。")}<label class="form-field"><span>默认生成方案</span><select class="field" data-config="defaultProfile">${c.profiles.map((p) => `<option value="${e(p.id)}" ${c.defaultProfile === p.id ? "selected" : ""}>${e(p.name)}</option>`).join("")}</select></label><div class="buttons">${button(icon("plus", 14) + " 新建方案", "edit-api", "", "primary")}${button("批量测活", "batch-test", "", "primary")}${button("导出方案", "export-api")}${button("导入方案", "import-api")}${button("导入柏宝书方案", "baibai-import-api")}${button("从酒馆设置同步", "cloud-pull")}</div>${switchRow("跨设备同步API方案", "保存在酒馆服务器的扩展设置里；其他设备打开时自动读取较新的版本" + (c.ui.syncKeys === false ? "（不含密钥）" : "（含密钥）"), "sync-keys", c.ui.syncKeys !== false)}${section("已保存方案", c.profiles.map((p) => `<div class="api-row"><div class="api-title"><b>${e(p.name)}</b>${tag(p.type === "tavern" ? "酒馆" : p.transport === "helper" ? "助手代理" : "浏览器直连")}</div><small>${e(p.model || "沿用酒馆当前模型")}</small>${p.url ? `<small>${e(p.url)}</small>` : ""}<small>${p.id === "tavern" ? "需要酒馆助手生成接口" : store.key(p.id) ? p.rememberKey ? "密钥：本机记住（随方案导出/云同步）" : "密钥：仅当前内存" : "未填密钥（部分本地接口不需要）"}</small><div class="buttons">${p.id !== "tavern" ? button("编辑", "edit-api", p.id) + button("复制", "duplicate-api", p.id) : ""}${button("自定义测活", "test-api", p.id, "primary")}${p.id !== "tavern" ? button("删除", "delete-api", p.id, "danger") : ""}</div>${p.testPrompt ? `<small>测试用语：${e(p.testPrompt.slice(0, 60))}${p.testPrompt.length > 60 ? "…" : ""}</small>` : ""}${(() => { const t = c.ui.lastTest?.[p.id]; return t ? `<small class="${t.ok ? "" : "rose"}">上次测活：${t.ok ? "✓ 可用 · " + (t.ms / 1e3).toFixed(1) + "s" : "✗ 失败"} · ${e(new Date(t.ts).toLocaleString("zh-CN", { hour12: false }))}</small>` : ""; })()}</div>`).join(""))}${section("模块开关 → 实际使用的方案", `<div class="card">${Object.entries(MODULES).map(([id2, label]) => {
+      const on = store.isEnabled(id2);
+      return `<div class="route-row module-row ${on ? "" : "is-off"}"><div class="module-head"><button type="button" class="switch ${on ? "on" : ""}" data-action="module-toggle" data-id="${e(id2)}" role="switch" aria-checked="${on}" aria-label="${e(label)} 开关"></button><span>${e(label)}</span>${on ? "" : tag("已关闭", "rose")}</div><select class="field" data-route="${id2}" aria-label="${e(label)} API" ${on ? "" : "disabled"}>${choices.map(([v, name]) => `<option value="${e(v)}" ${(c.routes[id2] || "default") === v ? "selected" : ""}>${e(name)}</option>`).join("")}</select></div>`;
+    }).join("")}</div>`)}<p class="form-note">不需要的模块直接关掉：关闭后这个模块不会调用任何 API——手动按钮会提示“已关闭”，后台任务与自动推进直接跳过，也不占用调用额度。方案的选择保留，重新打开即可恢复。</p><p class="form-note">“助手代理”需要酒馆助手；“浏览器直连”要求服务允许当前浏览器跨域访问。直连地址由你指定，网络/服务端不兼容会报错，不会悄悄换到其他服务商。</p></div>`;
+  }
+  function apiEditorView(ui) {
+    const current = ui.engine.settings.data.profiles.find((p2) => p2.id === ui.route.id), p = current || { name: "", type: "openai", transport: "helper", url: "", model: "", temperature: 0.8, maxTokens: 3200, rememberKey: false };
+    return `<div class="pad"><form data-form="api"><input type="hidden" name="id" value="${e(current?.id || "")}">${field("方案名称", "name", p.name, { placeholder: "例如：日常聊天 / 长线规划", required: true, max: 40 })}${select("请求路径", "transport", [["helper", "通过酒馆助手代理"], ["direct", "浏览器直连（需要CORS支持）"]], p.transport)}${field("OpenAI兼容基础地址", "url", p.url, { placeholder: "https://你的接口地址/v1", required: true, max: 500 })}${field("API密钥", "key", "", { type: "password", placeholder: ui.engine.settings.key(p.id) ? "已设置；留空保留，勾选下方可清除" : "仅发给你指定的API，不进备份", max: 5e3 })}${checkbox("在本机记住密钥（明文浏览器存储，并非加密保险箱）", "rememberKey", p.rememberKey)}${current && ui.engine.settings.key(p.id) ? checkbox("清除这份方案已保存的密钥", "clearKey", false) : ""}${field("模型名称", "model", p.model, { placeholder: "填写服务商给出的完整模型名", required: true, max: 120 })}<div class="buttons">${button("读取模型列表", "models-draft")}</div><label class="form-field"><span>测活用语（仅此方案使用）</span><textarea class="field" name="testPrompt" rows="2" maxlength="2000" placeholder="留空则发送“请回复 OK。”">${e(p.testPrompt || "")}</textarea></label><div class="buttons">${current && current.id !== "tavern" ? button("用上面的用语测活", "test-api", current.id, "primary") : ""}</div>${current ? hint("测活按钮使用已保存的用语；改动后请先保存。") : hint("新方案保存后即可单独测活。")}<div class="two-cols">${field("温度 0—2", "temperature", p.temperature, { type: "number" })}${field("最大输出 128—16000", "maxTokens", p.maxTokens, { type: "number" })}</div>${hint("不会在导出的方案、手机备份或源码包里附带配置密钥。普通聊天文本若由你手动写入秘密，则仍属于聊天内容。")}<button class="btn primary wide" type="submit">保存这份方案</button></form></div>`;
+  }
+  function autoAgo(ts) {
+    if (!ts) return "—";
+    const d = Date.now() - ts;
+    if (d < 6e4) return "刚刚";
+    if (d < 36e5) return Math.round(d / 6e4) + " 分钟前";
+    if (d < 864e5) return Math.round(d / 36e5) + " 小时前";
+    return Math.round(d / 864e5) + " 天前";
+  }
+  function autoIn(ts) {
+    if (!ts || ts <= Date.now()) return "现在可以";
+    const d = ts - Date.now();
+    return d < 36e5 ? "约 " + Math.max(1, Math.round(d / 6e4)) + " 分钟后" : "约 " + Math.round(d / 36e5) + " 小时后";
+  }
+  function autoLedgerRows(ui) {
+    const s = ui.data, at = s.automation || {}, a = s.settings.auto, now = Date.now();
+    const labels = { proactive: "角色主动来信", memory: "记忆整理", planner: "剧情规划", social: "生活动态" };
+    const rows = ["proactive", "memory", "planner", "social"].map((m) => {
+      const on = ui.engine.settings.isEnabled(m), back = at.next?.[m] || 0, fails = at.failures?.[m] || 0;
+      const state = !on ? "模块已关闭" : fails && back > now ? "退避中（失败 " + fails + " 次）· " + autoIn(back) : back > now ? "等 " + autoIn(back) : "待命";
+      const gate = m === "proactive" ? a.proactiveIgnoreQuiet !== false && a.proactiveUnlimited !== false ? "不受上限 / 免打扰" : "按上限与免打扰" : "按上限与免打扰";
+      const reply = at.lastReply?.[m] === void 0 ? "—" : String(at.lastReply[m]);
+      return `<p class="tiny muted" style="margin:6px 0"><b>${e(labels[m])}</b> · ${e(gate)} · 上次 ${e(autoAgo(at.last?.[m]))} · 当时的回复计数 ${e(reply)} · ${e(state)}</p>`;
+    }).join("");
+    return rows + `<p class="tiny muted" style="margin:6px 0">本机存档累计任务 ${(at.attempts || []).length} 次（近 24 小时） · 当前状态：${e(ui.engine.scheduler.status)}</p>`;
+  }
+  function autoProactiveLogRows(s) {
+    const rows = [...s.automation?.proactiveLog || []].reverse();
+    if (!rows.length) return empty("还没有主动来信记录", "角色主动联系过你之后，这里会留下最近的话题，用来避免重复。", "bell");
+    return rows.map((r2) => `<p class="tiny muted" style="margin:6px 0"><b>${e(r2.name)}</b> · ${e(autoAgo(r2.ts))} · ${e(r2.text || "")}${r2.reason ? " · " + e(r2.reason) : ""}</p>`).join("");
+  }
+  function automationView(ui) {
+    if (!ui.data) return empty("先打开角色聊天");
+    const a = ui.data.settings.auto, counts = ui.engine.gate.counts(), exempt = a.proactiveUnlimited !== false;
+    const plog = ui.data.automation?.proactiveLog || [];
+    return `<div class="pad"><div class="card">${switchRow("允许后台自动工作", "首次开启需确认：会额外调用你分配的模型接口", "auto-enable", a.enabled)}<p class="tiny muted" style="margin-top:10px">${e(ui.engine.scheduler.status)}</p></div><div class="two-cols"><div class="mini-stat"><strong>${counts.hour}<small>/${a.maxHourly}</small></strong><span>近1小时<br>自动调用</span></div><div class="mini-stat"><strong>${counts.day}<small>/${a.maxDaily}</small></strong><span>近24小时<br>自动调用</span></div></div>${exempt ? hint("主动来信已解除限制：不占用上方每小时/24小时额度，也不受夜间免打扰影响；上面的数字只统计其它模块。") : ""}<div class="card"><h3 style="margin:0 0 6px">调度账本</h3><p class="tiny muted">每个模块各自的额度、上次调用与失败退避；这里只读，不改变规则。</p>${autoLedgerRows(ui)}</div><form data-form="automation"><div class="card">${checkbox("角色主动来信（无需你先发送）", "proactive", a.proactive)}${checkbox("主动来信不受调用上限限制（每小时 / 24小时）", "proactiveUnlimited", a.proactiveUnlimited !== false)}${checkbox("主动来信不受夜间免打扰限制", "proactiveIgnoreQuiet", a.proactiveIgnoreQuiet !== false)}${checkbox("角色自动发生活动动态", "social", a.social)}${checkbox("归纳记忆、按正文证据核对当前一步", "memory", a.memory)}</div><div class="two-cols">${field("主动来信：每隔几次酒馆回复（0 = 每轮都检查）", "proactiveEvery", a.proactiveEvery ?? 3, { type: "number" })}${field("主动来信：最小间隔分钟（0 = 不额外等待，最短 1 分钟）", "proactiveMinutes", a.proactiveMinutes ?? 20, { type: "number" })}${field("同一角色未读上限（0 = 不限制）", "proactiveUnreadCap", a.proactiveUnreadCap ?? 3, { type: "number" })}${field("防重复话题记忆条数（0 = 关闭）", "proactiveCooldown", a.proactiveCooldown ?? 6, { type: "number" })}${field("生活动态：每隔几次酒馆回复", "socialEvery", a.socialEvery || 5, { type: "number" })}${field("每小时最多自动调用（不含主动来信）", "maxHourly", a.maxHourly, { type: "number" })}${field("24小时最多自动调用（不含主动来信）", "maxDaily", a.maxDaily, { type: "number" })}${field("免打扰开始 / 剧情小时", "quietStart", a.quietStart, { type: "number" })}${field("免打扰结束 / 剧情小时", "quietEnd", a.quietEnd, { type: "number" })}</div><p class="form-note">主动来信：默认不受每小时/24小时上限与夜间免打扰限制；节奏仍由“每隔几次回复 + 最小间隔（最短 60 秒） + 失败退避”控制，模型判断现在不宜发信时不会发送（一次“检查但不发”不占用上限）。同一角色积累未读超过上限时先等你查看。“防重复话题”会把最近几条主动来信摘录进提示词，要求换话题、换开场。生活动态、规划与记忆整理仍按上限与免打扰执行；相同免打扰起止小时表示关闭夜间限制。</p><button type="submit" class="btn primary wide">保存后台规则</button></form><div class="card"><h3 style="margin:0 0 6px">最近主动来信（${plog.length} 条）</h3>${autoProactiveLogRows(ui.data)}${plog.length ? `<div class="buttons">${button("清空主动来信记录", "proactive-log-clear", "", "danger")}</div>` : ""}<p class="form-note">这些记录只用于让提示词避免重复话题，不会写进正文、世界书或柏宝书，也不计入调用额度。</p></div><div class="buttons">${button("现在检查一次调度", "scheduler-tick")}${button("导出可读数据（Markdown）", "export-readable")}${button("停止当前生成", "stop", "", "danger")}</div></div>`;
+  }
+
+  function backupView(ui) {
+    return `<div class="pad">${hint("恢复只覆盖当前聊天/分支的手机记录，不恢复整段正文，不改人物原件或stat_data。恢复后后台保持关闭。")}<div class="card"><h3>保存这一部手机</h3><p class="tiny muted">完整备份包含当前手机记录与引用的本机图片，不包含API密钥。下载成功需要你在浏览器中确认。</p><div class="buttons">${button(icon("download", 14) + " 含图片完整备份", "export-backup", "", "primary")}${button("仅记录备份", "export-records")}${button("导出可读数据（Markdown）", "export-readable")}</div><div class="buttons">${button(icon("upload", 14) + " 导入联系人档案包", "contact-pack-import")}</div></div><div class="card"><h3>从备份恢复</h3><p class="tiny muted">先校验与预览，再下载当前备份；经过第二次确认才替换，拒绝错误格式与危险属性。</p><div class="buttons">${button(icon("upload", 14) + " 选择备份文件", "restore-backup")}</div></div><p class="form-note">不使用 localStorage.clear()，不打包整站浏览器存储。照片在专用IndexedDB中；仅记录备份不包含像素，不能承诺在另一设备恢复照片。</p></div>`;
+  }
+  function logsView(ui) {
+    const logs = ui.data?.logs || [];
+    return `<div class="pad">${hint("这里显示任务结果与错误，不记录API密钥。记录只保留最近200条诊断；聊天原文不会因此被删。")}${ui.engine.router.lastRequest ? `<div class="card"><h3>最近一次请求</h3><p class="tiny muted">${e(MODULES[ui.engine.router.lastRequest.module] || ui.engine.router.lastRequest.module)} → ${e(ui.engine.router.lastRequest.profile)}<br>${e(ui.engine.router.lastRequest.model)}${ui.engine.router.lastRequest.mock ? "<br>离线模拟，未请求真实模型" : ""}</p></div>` : ""}${logs.length ? tpDeleteBar("logs", logs.length, "运行记录") : ""}${logs.length ? [...logs].reverse().map((l) => `<div class="log-line ${l.level === "warning" ? "warning" : ""}"><b>${e(MODULES[l.module] || "系统")} · ${e(new Date(l.ts).toLocaleTimeString("zh-CN"))}</b><p>${e(l.message)}</p></div>`).join("") : empty("暂时没有运行记录", "完成一次生成后，这里会留下结果。", "file")}</div>`;
+  }
+

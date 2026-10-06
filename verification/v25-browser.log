@@ -1,6 +1,0 @@
-
-> tsukiyo-phone@2.5.0 test:browser
-> node test/browser.playwright.cjs
-
-BROWSER_DESKTOP_OK: new/edit rules -> save -> AVS prompt; five workbench tabs; manual event form; no page errors; no horizontal overflow
-BROWSER_MOBILE_OK: new/edit rules -> save -> AVS prompt; five workbench tabs; manual event form; no page errors; no horizontal overflow

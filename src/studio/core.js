@@ -50,6 +50,7 @@
     assert(v && v.version === 1 && v.config, "剧情工作台存档版本错误");
     const limits = { rules:450, pool:40, cycles:80, drafts:100, roster:30, states:100, memories:200, attempts:100, logs:80 };
     for (const [key,max] of Object.entries(limits)) assert(Array.isArray(v[key]) && v[key].length <= max, "工作台数据数量错误：" + key);
+    centerValidate(v);
     v.rules.forEach(studioRule);
     assert(new Set(v.rules.map(r=>r.id)).size === v.rules.length, "规则编号重复");
     assert(Number.isInteger(v.config.probability) && v.config.probability >= 0 && v.config.probability <= 100 && Number.isInteger(v.config.cooldown) && v.config.cooldown >= 0 && v.config.cooldown <= 30, "事件概率/冷却错误");
@@ -82,14 +83,14 @@
     assert(win.crypto?.getRandomValues, "当前浏览器不支持安全随机选择");
     const bytes = new Uint32Array(1); win.crypto.getRandomValues(bytes); return bytes[0] / 4294967296;
   }
-  function studioSelect(st, snap, rng) {
+  function studioSelect(st, snap, rng, phone = null) {
     assert(!st.active, "请先结束/取消当前事件");
     const key = avsPrefix(snap,snap.floor), prev = st.cycles.find(r=>r.key===key);
     if (prev) return { repeat:true, eventId:prev.eventId };
     const used = st.cycles.filter(r=>r.eventId && studioValid(r,snap));
     const last = used.at(-1);
     if (last && snap.floor-last.floor < st.config.cooldown) return { cooldown:true };
-    const eligible = st.pool.filter(r=>r.status==="candidate" && studioValid(r,snap) && snap.floor-r.floor <= 40);
+    const eligible = st.pool.filter(r=>r.status==="candidate" && studioValid(r,snap) && (!phone || centerLinkValid(phone,r)) && snap.floor-r.floor <= 40);
     assert(eligible.length, "没有有效候选事件，请生成事件池或手动添加");
     let event = null;
     if (rng() * 100 < st.config.probability) {
@@ -112,7 +113,7 @@
       return c && r.absent && r.absent.floor===snap.floor && studioValid(r.absent,snap) && !scene.has(c.name) && !latest.includes(c.name);
     }).slice(0,3);
   }
-  function studioDirectorOn(s,snap) { const st=studioData(s); return !!(st.config.directorInject && st.active && studioValid(st.active,snap)); }
+  function studioDirectorOn(s,snap) { const st=studioData(s); return !!(st.config.directorInject && st.active && studioValid(st.active,snap) && centerLinkValid(s,st.active.event)); }
   function studioProjection(s,snap,settings) {
     if (!s.settings.inject || !snap) return "";
     const st=studioData(s), parts=[];
@@ -171,7 +172,7 @@
           await eng.actions.perform(kind,()=>({...request,parse:raw=>parseModelJson(raw,60000),success:"工作台候选结果已保存"}), (s,value)=>{
             const st=s.studio ||= studioFresh();
             if(kind==="director") {
-              const rows=studioReadEvents(JSON.stringify(value),snap);assert(st.pool.length+rows.length<=40,"事件池已达40条，请删除旧候选");st.pool.push(...rows);
+              const rows=studioReadEvents(JSON.stringify(value),snap);centerAssignSources(s,rows,request);assert(st.pool.length+rows.length<=40,"事件池已达40条，请删除旧候选");st.pool.push(...rows);
             } else if(kind==="parallel") {
               assert(Array.isArray(value.portraits)&&value.portraits.length<=3,"侧写结果格式或人数错误");
               const allowed=new Set(request.payload.npcs.map(n=>n.contactId));
@@ -209,3 +210,4 @@
     const i=st.states.findIndex(r=>r.id===next.id);if(i<0)st.states.push(next);else st.states[i]=next;
     d.status="approved";studioLog(st,"核准"+c.name+"状态（仅手机，不写MVU/人物性格）");
   }
+
