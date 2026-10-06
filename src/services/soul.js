@@ -610,6 +610,21 @@
       this.eng.events?.emit?.({ type: "status" });
     }
     /** 手机事件（交流 / 约定 / 心迹 / 日记）→ 该角色「记忆」分节。 */
+    /** 导出名单 JSON（「导出名单」按钮走这里；字段与旧版 SoulLink 名单一致，方便迁移） */
+    exportRoster() {
+      const snap = this.eng?.repo?.snapshot || {};
+      let chatKey = "", chatLabel = "";
+      try {
+        const parts = JSON.parse(snap.owner || "[]");
+        if (Array.isArray(parts)) {
+          chatKey = String(parts[2] ?? "");
+          chatLabel = String(parts[1] ?? "");
+        }
+      } catch {
+        chatKey = "";
+      }
+      return soulRosterExport(this.view(), { chatKey, chatLabel });
+    }
     pushPhoneLines(name, lines, { floor = -1 } = {}) {
       const s = this.data();
       if (!s) return 0;

@@ -1,5 +1,23 @@
 # 更新记录（CHANGELOG）
 
+## 2.9.2
+
+**主题：减重整改 —— 只留一套「灵魂链接」，顺手修 BUG 与死代码**
+
+- **删除外部 SoulLink 扩展桥**（原 `services/soullink-bridge.js` 的桥本体 + `SOULLINK_SECTIONS` / `soulDefaults` 前导块）：
+  - 它读写的对象是**第三方酒馆扩展 SoulLink** 的 `extensionSettings`，必须先装那个扩展才有数据；而小手机本身就内置了功能重叠的「灵魂链接（五节档案 + 增量维护 + 精编 + 发送前推演 + 名单导入导出）」，
+    设置页因此出现「SoulLink 联动（灵魂链接）」与「灵魂链接（内置）」两张近似卡片，主页磁贴也叫「灵魂链接」，容易误解且会重复调用模型。
+  - 一并移除：设置页 `soullinkCard()`、`ui/views-settings.js` 里的卡片挂载、`ui/commands.js` 里 7 个 `soullink-toggle/write/scan/pull/push/export/import` 动作、名单页的「从已装的 SoulLink 档案导入」按钮与 `soul-import-extension` 动作。
+  - 保留：名单 JSON 的导入导出（`soul-export` / `soul-import`）与「导入名单文件」路径 —— 字段仍与旧版 SoulLink 名单一致，老文件可以照常迁入；**不再读取、不再写入任何外部扩展**。
+- **修复 BUG**：`ui/commands.js` 的「导出名单」调用 `engine.soul.exportRoster()`，但 `SoulStudio` 里并没有这个方法（点下去只会报错）。本版补齐 `SoulStudio.exportRoster()`（带聊天标识与 `（#n楼）` 楼层后缀），并加冒烟断言。
+- **死代码清理**（全部做过全仓引用扫描，确认零调用点）：`ui/views-planner.js → plannerView()`、`ui/commands.js → oldPhone()`、`services/memory-studio.js → msMode() / msKeywordsOf()`。
+- **切片归位**：`PhoneEngine` 组装类从 `services/soullink-bridge.js` 切片搬回 `core/engine.js`（此前该文件只是一个 24 字符占位注释）；`center/ui.js` 尾部的 SoulLink 前导常量删除；`src/` 切片数 53 → 52。
+- **工具**：新增 `tools/release.js`（重算 manifest 切片 sha256 → 独立版 → 卡内嵌版 → 酒馆助手导入版 JSON），`tools/embedded-preset.json` 保存卡内嵌版预置数据；`tools/build.js` 仅保留拼接功能。
+- **文档**：`docs/模块索引.md` 按新结构重算行号；新增 `docs/v2.9.2_整改说明.md`；README 同步。
+- 测试：`tools/smoke_test.js` 115 项（删除只服务于外部桥的 [2] 段，新增「导出名单方法存在」「外部桥已移除」两条）、`tools/smoke_delegate.js` 16 项，全绿。
+
+---
+
 ## 2.9.1
 
 **主题：楼层记忆归属互斥 —— 检测到百宝月夜书「剧情剪辑台」时，手机不再重复生成楼层记忆**

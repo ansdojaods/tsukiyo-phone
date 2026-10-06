@@ -33,9 +33,6 @@
   function msData(s) {
     return s?.ms || msFresh();
   }
-  function msMode(v) {
-    return msData(v).cfg ? msData(v) : null;
-  }
   function msNorm(value) {
     return String(value ?? "").replace(/[\s\u3000，。、；：！？…—·“”‘’"'()（）【】\[\]<>《》~～]+/g, "").toLowerCase();
   }
@@ -76,18 +73,6 @@
     for (const k in b) nb += b[k] * b[k];
     if (!na || !nb) return 0;
     return dot / Math.sqrt(na * nb);
-  }
-  function msKeywordsOf(value, extra = []) {
-    const stop = /* @__PURE__ */ new Set(["什么", "怎么", "这个", "那个", "我们", "你们", "他们", "自己", "现在", "已经", "可以", "还是", "如果", "因为", "所以", "然后", "知道", "觉得", "时候", "东西", "事情"]);
-    const seen = /* @__PURE__ */ new Set(), out = [];
-    for (const item of [...(extra || []), ...msTokens(value)]) {
-      const word = String(item || "").trim();
-      if (word.length < 2 || stop.has(word) || seen.has(word)) continue;
-      seen.add(word);
-      out.push(word);
-      if (out.length >= 12) break;
-    }
-    return out;
   }
   function msActive(tree) {
     const covered = /* @__PURE__ */ new Set();

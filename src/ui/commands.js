@@ -557,18 +557,6 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
     await restoreBackup(ui.engine.repo, ui.engine.media, inspected, snap);
     ui.notify("已恢复并回读确认。后台保持关闭，请先核对配置。");
   }
-  async function oldPhone(ui) {
-    const snap = snapshot(ui);
-    assert(snap.legacy, "当前聊天没有找到旧版“手机终端”记录");
-    const inspected = inspectLegacy(snap.legacy), q = inspected.summary;
-    const okay = await ui.confirm("导入当前卡的旧手机", `可识别${q.direct}个私聊、${q.groups}个群聊、${q.notes}条便签、${q.history}份过往。
-
-会保留完整原件归档，再接入新手机。原变量不改，不重复导入同一份记录。未适配字段与${q.photos}张旧留影的原始资料仍在归档中，不伪称已转换图片。`, "保留原件并导入");
-    if (!okay) return;
-    still(ui, snap);
-    await change(ui, (s) => importLegacy(s, inspected, { active: true }), "导入原手机记录", snap);
-    ui.notify("旧手机原件已归档，可在记忆库导出。");
-  }
   async function handleAction(ui, action, value, target) {
     const engine = ui.engine;
     if (action.startsWith("center-")) return centerAction(ui, action, value);
@@ -1755,69 +1743,6 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
         ui.notify("已按世界书状态同步。");
         return;
       }
-      case "soullink-toggle": {
-        const p = ui.engine.soullink.prefs();
-        const next = ui.engine.soullink.setPrefs({ enabled: !p.enabled });
-        ui.notify(next.enabled ? "SoulLink 联动已启用（读取档案）。" : "SoulLink 联动已关闭。");
-        return;
-      }
-      case "soullink-write": {
-        const p = ui.engine.soullink.prefs();
-        const next = ui.engine.soullink.setPrefs({ push: !p.push });
-        ui.notify(next.push ? "已允许写回 SoulLink（向角色的「记忆」分节追加小手机条目）。" : "已停止写回 SoulLink。");
-        return;
-      }
-      case "soullink-scan": {
-        const scan = ui.engine.soullink.scan();
-        ui.notify(scan.note || (scan.found ? "已检测到 SoulLink 档案。" : "没有检测到 SoulLink。"));
-        return;
-      }
-      case "soullink-pull": {
-        if (!await ui.confirm("导入 SoulLink 档案到手机？", "会把 SoulLink 里已登记的角色档案读成手机联系人资料与记忆条目（带 SoulLink 标记，不会写进记忆世界书）。同名联系人只追加资料，不覆盖人设。", "导入")) return;
-        try {
-          const res = await ui.engine.soullink.pull();
-          ui.notify(`已导入：新增联系人 ${res.contacts} 个、记忆 ${res.memories} 条。`);
-        } catch (err) {
-          ui.notify(err?.message || "导入失败", "error");
-        }
-        return;
-      }
-      case "soullink-push": {
-        const p = ui.engine.soullink.prefs();
-        if (!p.push) {
-          ui.notify("请先打开「允许把手机记录写回 SoulLink」。", "error");
-          return;
-        }
-        if (!await ui.confirm("把手机记录写回 SoulLink？", "会把最近的交流、约定、恋爱心迹与日记追加到对应角色的「记忆」分节（每条带「小手机」标记，重复内容不会重复写）。这是对另一个扩展设置的写入，建议先在 SoulLink 里导出一次名单做备份。", "写回")) return;
-        try {
-          const res = await ui.engine.soullink.push();
-          ui.notify(res.written ? `已写回 ${res.written} 条到：${res.names.join("、")}` : "没有新的内容需要写回。");
-        } catch (err) {
-          ui.notify(err?.message || "写回失败", "error");
-        }
-        return;
-      }
-      case "soullink-export":
-        download(ui, "soullink-roster-" + new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19) + ".json", ui.engine.soullink.exportRoster());
-        return;
-      case "soullink-import": {
-        const file = await ui.pickFile(".json,application/json", 8 * 1024 * 1024);
-        if (!file) return;
-        let raw;
-        try {
-          raw = JSON.parse(await file.text());
-        } catch {
-          ui.notify("不是有效的 JSON 文件。", "error");
-          return;
-        }
-        try {
-          const res = await ui.engine.soullink.importRoster(raw);
-          ui.notify(`已导入名单：新增联系人 ${res.contacts} 个、记忆 ${res.memories} 条。`);
-        } catch (err) {
-          ui.notify(err?.message || "导入失败", "error");
-        }
-        return;
-      }
       case "soul-toggle": {
         const soul = engine.soul, on = !ui.data.soul.enabled;
         await change(ui, (s) => {
@@ -1969,19 +1894,6 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
           stats = soulRosterImport(soulData(s), raw);
         }, "导入灵魂链接名单");
         ui.notify("导入完成：新增/覆盖 " + stats.characters + " 个角色，新增 " + stats.entries + " 条（重复跳过 " + stats.skipped + "）。");
-        return;
-      }
-      case "soul-import-extension": {
-        const sl = engine.soullink;
-        assert(sl, "不可用");
-        const scan = sl.scan();
-        assert(scan.found, scan.note || "没有在扩展设置里找到 SoulLink 档案");
-        const roster = sl.exportRoster();
-        let stats = null;
-        await change(ui, (s) => {
-          stats = soulRosterImport(soulData(s), roster.roster ? { roster: roster.roster } : roster);
-        }, "从 SoulLink 扩展导入档案");
-        ui.notify("已从已装的 SoulLink 导入 " + stats.characters + " 个角色、新增 " + stats.entries + " 条。");
         return;
       }
       case "soul-preset": {

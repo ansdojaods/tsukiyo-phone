@@ -1,15 +1,15 @@
-/* 逻辑冒烟测试：在 Node 里加载 dist 里的 bundle，导出内部服务类，用桩环境跑世界书工坊、SoulLink 桥（扩展 + 内置灵魂链接）、记忆工作台（分层摘要 / 召回 / 收纳）、百宝月夜书公开 API 联动、导出/档案包与静态体检。
+/* 逻辑冒烟测试：在 Node 里加载 dist 里的 bundle，导出内部服务类，用桩环境跑世界书工坊、内置灵魂链接、记忆工作台（分层摘要 / 召回 / 收纳）、百宝月夜书公开 API 联动、导出/档案包与静态体检。
    用法：node tools/smoke_test.js [path/to/tsukiyo-phone.js]  （全绿即通过）*/
 const fs = require("fs");
 const path = require("path");
-const FILE = process.argv[2] || path.join(__dirname, "..", "dist", "tsukiyo-phone-v2.9.1.js");
+const FILE = process.argv[2] || path.join(__dirname, "..", "dist", "tsukiyo-phone-v2.9.2.js");
 const src = fs.readFileSync(FILE, "utf8");
 let code = src.replace(/TsukiyoPhoneBundle\.start\([^)]*\);?\s*$/, "");
 // 测试用导出（不进入交付物）
-code = code.replace("return __toCommonJS(index_exports);", "__export(index_exports, { BookStudio: () => BookStudio, SoulLinkBridge: () => SoulLinkBridge, freshPhone: () => freshPhone, planMemorySync: () => planMemorySync, normalizeEntry: () => normalizeEntry, phoneReadableDump: () => phoneReadableDump, contactPackFrom: () => contactPackFrom, applyContactPack: () => applyContactPack, proactiveCooldownNote: () => proactiveCooldownNote, SoulStudio: () => SoulStudio, soulFresh: () => soulFresh, soulData: () => soulData, soulEnsure: () => soulEnsure, soulAddEntry: () => soulAddEntry, soulMerge: () => soulMerge, soulRender: () => soulRender, soulRosterExport: () => soulRosterExport, soulRosterImport: () => soulRosterImport, soulValidate: () => soulValidate, soulView: () => soulView, soulCharView: () => soulCharView, SOUL_SECTIONS: () => SOUL_SECTIONS, SOUL_KEYS: () => SOUL_KEYS, MemoryStudio: () => MemoryStudio, msFresh: () => msFresh, msData: () => msData, msValidate: () => msValidate, msCoverage: () => msCoverage, msActive: () => msActive, msLedgerApply: () => msLedgerApply, msDraftPush: () => msDraftPush, msRecallBlock: () => msRecallBlock, msView: () => msView, msCard: () => msCard, msDelegateCard: () => msDelegateCard, MemoryApiLink: () => MemoryApiLink, memApiFresh: () => memApiFresh, memApiValidate: () => memApiValidate, memApiCard: () => memApiCard, memApiPreviewCard: () => memApiPreviewCard });\n  return __toCommonJS(index_exports);");
+code = code.replace("return __toCommonJS(index_exports);", "__export(index_exports, { BookStudio: () => BookStudio, freshPhone: () => freshPhone, planMemorySync: () => planMemorySync, normalizeEntry: () => normalizeEntry, phoneReadableDump: () => phoneReadableDump, contactPackFrom: () => contactPackFrom, applyContactPack: () => applyContactPack, proactiveCooldownNote: () => proactiveCooldownNote, SoulStudio: () => SoulStudio, soulFresh: () => soulFresh, soulData: () => soulData, soulEnsure: () => soulEnsure, soulAddEntry: () => soulAddEntry, soulMerge: () => soulMerge, soulRender: () => soulRender, soulRosterExport: () => soulRosterExport, soulRosterImport: () => soulRosterImport, soulValidate: () => soulValidate, soulView: () => soulView, soulCharView: () => soulCharView, SOUL_SECTIONS: () => SOUL_SECTIONS, SOUL_KEYS: () => SOUL_KEYS, MemoryStudio: () => MemoryStudio, msFresh: () => msFresh, msData: () => msData, msValidate: () => msValidate, msCoverage: () => msCoverage, msActive: () => msActive, msLedgerApply: () => msLedgerApply, msDraftPush: () => msDraftPush, msRecallBlock: () => msRecallBlock, msView: () => msView, msCard: () => msCard, msDelegateCard: () => msDelegateCard, MemoryApiLink: () => MemoryApiLink, memApiFresh: () => memApiFresh, memApiValidate: () => memApiValidate, memApiCard: () => memApiCard, memApiPreviewCard: () => memApiPreviewCard });\n  return __toCommonJS(index_exports);");
 const mod = { exports: {} };
 const bundle = new Function("module", "exports", code + "\n;return TsukiyoPhoneBundle;")(mod, mod.exports);
-const { BookStudio, SoulLinkBridge, SoulStudio, soulFresh, soulData, soulEnsure, soulAddEntry, soulMerge, soulRender, soulRosterExport, soulRosterImport, soulValidate, soulView, soulCharView, SOUL_SECTIONS, SOUL_KEYS, freshPhone, planMemorySync, normalizeEntry, phoneReadableDump, contactPackFrom, applyContactPack, proactiveCooldownNote, MemoryStudio, msFresh, msData, msValidate, msCoverage, msActive, msLedgerApply, msDraftPush, msRecallBlock, msView, msCard, msDelegateCard, MemoryApiLink, memApiFresh, memApiValidate, memApiCard, memApiPreviewCard } = bundle;
+const { BookStudio, SoulStudio, soulFresh, soulData, soulEnsure, soulAddEntry, soulMerge, soulRender, soulRosterExport, soulRosterImport, soulValidate, soulView, soulCharView, SOUL_SECTIONS, SOUL_KEYS, freshPhone, planMemorySync, normalizeEntry, phoneReadableDump, contactPackFrom, applyContactPack, proactiveCooldownNote, MemoryStudio, msFresh, msData, msValidate, msCoverage, msActive, msLedgerApply, msDraftPush, msRecallBlock, msView, msCard, msDelegateCard, MemoryApiLink, memApiFresh, memApiValidate, memApiCard, memApiPreviewCard } = bundle;
 console.log("exports:", Object.keys(bundle).join(","));
 
 const soulEntryCountLite = (row) => ["性格", "世界观", "家庭背景", "人际关系", "记忆"].reduce((n, k) => n + (row?.sections?.[k]?.length || 0), 0);
@@ -81,37 +81,6 @@ function makeEngine(world) {
   data.diary = []; data.summaries = []; data.agenda = [];
   let r5 = await studio.sync({ reason: "manual", force: true });
   ok(r5.stats.created > 0 || studio.confirmNeeded, "手机数据被清空后触发重建/保险丝流程：" + JSON.stringify({ created: r5.stats.created, confirm: !!studio.confirmNeeded }));
-
-  console.log("\n[2] SoulLink 桥：扫描 / 导入 / 写回 / 导出");
-  const slWorld = {
-    extensionSettings: {
-      SoulLink: {
-        archives: {
-          "测试聊天": {
-            临安: { 姓名: "临安", 年龄: null, 性格: ["娇蛮明亮"], 世界观: [], 家庭背景: [], 人际关系: ["二公主"], 记忆: [{ id: 1, text: "她记得税银案", floor: 3, updatedAt: 1 }] },
-            慕南栀: { 姓名: "慕南栀", 年龄: null, 性格: ["温柔克制"], 世界观: [], 家庭背景: [], 人际关系: [], 记忆: ["她在花肥里埋了碎银"] }
-          }
-        },
-        apiKey: "SECRET"
-      }
-    },
-    saveSettingsDebounced() { this.saved = true; }
-  };
-  const e2 = makeEngine(makeWorld());
-  e2.engine.settings.cloud = () => slWorld;
-  const sl = new SoulLinkBridge(e2.engine);
-  const scan = sl.scan();
-  ok(scan.found && scan.count === 2 && scan.key === "SoulLink" && scan.chatKey === "测试聊天", "扫描到嵌套结构的聊天档案：" + scan.note);
-  const pulled = await sl.pull();
-  ok(pulled.memories === 2, "导入记忆 2 条（临安 1 + 慕南栀 1），实际 " + pulled.memories);
-  ok(e2.data.contacts.some((c) => c.name === "慕南栀"), "为未收录角色新建联系人");
-  ok(e2.data.contacts.find((c) => c.name === "临安").references.some((r) => r.book === "SoulLink 档案"), "临安追加 SoulLink 档案资料");
-  const pushed = await sl.push();
-  ok(pushed.written > 0 && slWorld.saved === true, "写回 SoulLink 并触发保存：" + JSON.stringify(pushed));
-  const roster = sl.exportRoster();
-  ok(roster.kind === "roster" && roster.roster["临安"] && Array.isArray(roster.roster["临安"].记忆), "导出 roster 结构可用（count=" + roster.count + "）");
-  const imported = await sl.importRoster({ roster: { 怀庆: { 姓名: "怀庆", 性格: ["冷静要证据"], 记忆: ["一条从未发出的消息"] } } });
-  ok(imported.contacts === 1 && imported.memories === 1, "导入 SoulLink 名单：+1 联系人 +1 记忆");
 
   console.log("\n[3] 主动来信解除限制（静态检查）");
   const patched = src;
@@ -248,8 +217,11 @@ function makeEngine(world) {
   ok(typeof html === "string" && html.includes("灵魂链接") && html.includes("临安") && html.includes("data-form=\"soul\""), "名单页可渲染（含参数表单）");
   ok(typeof html2 === "string" && html2.includes("世界观") && html2.includes("data-form=\"soul-entry\"") && html2.includes("娇蛮明亮"), "角色档案页可渲染（五节 + 新增条目表单）");
 
+  ok(typeof soul9.exportRoster === "function" && soul9.exportRoster().kind === "roster" && soul9.exportRoster().roster["临安"], "「导出名单」按钮背后的 SoulStudio.exportRoster() 存在（v2.9.2 修掉了原先调用不存在方法的报错）");
+  ok(!/SoulLinkBridge/.test(patched) && !/soullink-toggle/.test(patched) && !/this\.soullink/.test(patched) && /var PhoneEngine = class/.test(patched), "外部 SoulLink 扩展桥已移除（无 SoulLinkBridge / 无 soullink-* 动作），PhoneEngine 落在 core/engine.js 切片");
+
   console.log("\n[9] v2.8.0 静态检查");
-  ok(/version: "2.9.1"/.test(patched), "版本号（v2.8 的检查已随版本号移交 [12]）");
+  ok(/version: "2.9.2"/.test(patched), "版本号（v2.8 的检查已随版本号移交 [12]）");
   ok(/soul: "灵魂链接（NPC 档案与推演）"/.test(patched) && /routes: Object\.fromEntries\(Object\.keys\(MODULES\)/.test(patched), "MODULES 注册 soul，路由与开关自动派生（API 方案页可单独配 soul 方案）");
   ok(/soul: soulFresh\(\)/.test(patched) && /soulValidate\(data\.soul\)/.test(patched), "存档默认值与校验已接入");
   ok(/var SoulStudio = class/.test(patched) && /this\.soul = new SoulStudio\(this\)/.test(patched) && /this\.soul\.start\(\)/.test(patched) && /this\.soul\.dispose\(\)/.test(patched), "SoulStudio 已接入引擎生命周期");
@@ -260,7 +232,7 @@ function makeEngine(world) {
   ok(/soul: "灵魂链接档案（性格 \/ 世界观 \/ 家世 \/ 人际 \/ 记忆）"/.test(patched) && /if \(p\.src === "soul"\)/.test(patched), "世界书工坊新增「灵魂链接档案」来源，且档案条目只写不取（避免覆盖）");
   ok(/Object\.keys\(soulData\(s\)\.roster\)\.length \+ " 人"/.test(patched) && /## 七、灵魂链接档案/.test(patched), "可读导出带灵魂链接档案章节");
   ok(/拦截发送按钮/.test(patched) && /#send_but/.test(patched) && /#send_textarea/.test(patched), "推演可选拦截酒馆发送按钮（点击 / 回车两条路径）");
-  const soulActions = ["soul-toggle", "soul-auto-toggle", "soul-roleplay-toggle", "soul-mode", "soul-gate-mode", "soul-analyze", "soul-analyze-all", "soul-condense", "soul-roleplay", "soul-roleplay-clear", "soul-add-char", "soul-import-contacts", "soul-char-del", "soul-entry-del", "soul-pull-phone", "soul-export", "soul-import", "soul-import-extension", "soul-preset", "soul-preset-reset", "soul-presets-export", "soul-presets-import", "soul-log-clear"];
+  const soulActions = ["soul-toggle", "soul-auto-toggle", "soul-roleplay-toggle", "soul-mode", "soul-gate-mode", "soul-analyze", "soul-analyze-all", "soul-condense", "soul-roleplay", "soul-roleplay-clear", "soul-add-char", "soul-import-contacts", "soul-char-del", "soul-entry-del", "soul-pull-phone", "soul-export", "soul-import", "soul-preset", "soul-preset-reset", "soul-presets-export", "soul-presets-import", "soul-log-clear"];
   const missed = soulActions.filter((a) => !new RegExp('case "' + a + '"').test(patched));
   ok(missed.length === 0, "灵魂链接动作分支齐全（" + soulActions.length + " 个）" + (missed.length ? "，缺：" + missed.join(",") : ""));
   ok(/soulData\(s\)\.roster\[row\.name\] \|\| \{\}/.test(patched) === false, "占位检查（不应命中的写法）");
@@ -415,9 +387,9 @@ function makeEngine(world) {
   const pull11b = await api11b.pull();
   ok(pull11b.ok === false && e11b.data.memApi.stats.fail === 1 && /指令|fetch|失败/.test(pull11b.note), "取不到资料时明确失败并计数，不写坏数据：" + pull11b.note.slice(0, 40));
 
-  console.log("\n[12] v2.9.1 静态检查");
-  ok(/version: "2.9.1"/.test(patched) && /小手机 v2\.9\.1/.test(patched), "版本号与头部注释 2.9.1");
-  ok(/delegate: \{ enabled: true, keepPhoneRecall: false/.test(patched) && /this\.assertOwner\(/.test(patched) && /msDelegateCard/.test(patched) && /楼层记忆由百宝月夜书接管/.test(patched), "v2.9.1 归属互斥已接入（默认开关 / 拦截 / 镜像 / 视图）");
+  console.log("\n[12] v2.9.2 静态检查");
+  ok(/version: "2.9.2"/.test(patched) && /小手机 v2\.9\.2/.test(patched), "版本号与头部注释 2.9.2");
+  ok(/delegate: \{ enabled: true, keepPhoneRecall: false/.test(patched) && /this\.assertOwner\(/.test(patched) && /msDelegateCard/.test(patched) && /楼层记忆由百宝月夜书接管/.test(patched), "v2.9.2 归属互斥已接入（默认开关 / 拦截 / 镜像 / 视图）");
   ok(/ms: msFresh\(\)/.test(patched) && /memApi: memApiFresh\(\)/.test(patched) && /msValidate\(data\.ms\)/.test(patched) && /memApiValidate\(data\.memApi\)/.test(patched), "存档默认值与校验已接入（旧存档自动补齐）");
   ok(/var MemoryStudio = class/.test(patched) && /this\.ms = new MemoryStudio\(this\)/.test(patched) && /this\.ms\.start\(\)/.test(patched) && /this\.ms\.dispose\(\)/.test(patched) && /this\.ms\.onGenerationEnded\(\)/.test(patched), "MemoryStudio 已接入引擎生命周期（启动 / 生成结束 / 卸载）");
   ok(/var MemoryApiLink = class/.test(patched) && /this\.memApi = new MemoryApiLink\(this\)/.test(patched), "MemoryApiLink 已接入引擎");

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * 把 src/ 下的模块切片按 manifest 顺序拼回单文件脚本（默认写到 dist/tsukiyo-phone-v2.9.1.js）。
+ * 把 src/ 下的模块切片按 manifest 顺序拼回单文件脚本（默认写到 dist/tsukiyo-phone-v<版本>.js）。
  *
- *   node tools/build.js                 # 默认输出到 dist/tsukiyo-phone-v2.9.1.js
+ *   node tools/build.js                 # 默认输出 dist/tsukiyo-phone-v<版本>.js（只拼切片）
+ *   node tools/release.js                # 推荐：重算 manifest + 独立版 + 卡内嵌版 + 导入版 JSON
  *   node tools/build.js /tmp/out.js      # 指定输出路径
  *
  * 判定：拼出的内容 sha256 与 manifest.sha256 相同时，说明与发布版逐字一致；

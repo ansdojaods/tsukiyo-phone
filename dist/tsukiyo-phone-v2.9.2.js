@@ -1,4 +1,4 @@
-/* 月夜来信 · 小手机 v2.9.1（记忆工作台 · 楼层记忆归属互斥 · 分层摘要 · 本地召回 · 状态账本 · 楼层收纳 · 百宝月夜书联动） ｜ 在 v2.9.0「记忆工作台 · 公开API联动」基础上的社区优化版：① 新增「楼层记忆归属互斥」——检测到百宝月夜书挂了「剧情剪辑台」（window.STBaiBaiBook.memoryEditor）时，手机侧停止生成楼层摘要、停止注入楼层记忆，只保留手机内通信记忆，避免两边各写一份摘要造成重复注入与缺口口径打架；② 记忆工作台顶部显示引擎接管状态与它的只读镜像（覆盖 / 缺口 / 摘要数 / 上次召回），提供「重新探测引擎」与「接管期间仍注入手机内记忆」开关；③ 没检测到引擎时一切照旧，手机自己管，功能不缺失。原创实现 · 不含用户 API 密钥或聊天存档 */
+/* 月夜来信 · 小手机 v2.9.2（记忆工作台 · 楼层记忆归属互斥 · 分层摘要 · 本地召回 · 状态账本 · 楼层收纳 · 百宝月夜书联动） ｜ 本版为一次“减重”整改：① 删除「外部 SoulLink 扩展桥」——它需要你先安装第三方酒馆扩展、并把手机记录写回别人的扩展设置，功能与小手机内置的「灵魂链接（NPC 档案 + 发送前推演）」重复，设置页与主页两处同名入口容易误解；现在只保留内置灵魂链接，数据全部在手机自己的存档里（不依赖、不读取任何外部扩展）；② 顺带清掉与本次相关及历年遗留的死代码（无调用点的旧页面 / 旧导入函数 / 重复导出函数），并把 PhoneEngine 组装类从 soullink-bridge.js 切片搬回它本该在的 core/engine.js；③ 修复「灵魂链接 → 导出名单」按钮调用了一个不存在的方法（会报错）的问题。原创实现 · 不含用户 API 密钥或聊天存档 */
 var TSUKIYO_PRESET = /*@@PRESET@@*/null/*@@END@@*/;
 var TsukiyoPhoneBundle = (() => {
   var PRESET = typeof TSUKIYO_PRESET === "object" && TSUKIYO_PRESET && Array.isArray(TSUKIYO_PRESET.contacts) ? TSUKIYO_PRESET : null;
@@ -31,7 +31,7 @@ var TsukiyoPhoneBundle = (() => {
   });
 
   // package.json
-  var package_default = { name: "tsukiyo-phone", version: "2.9.1", description: "月夜来信 · 独立实现的酒馆拟真社交与生活手机（酒馆助手脚本）：记忆工作台（分层摘要 / 状态账本 / 本地召回 / 楼层收纳） · 楼层记忆归属互斥（交给百宝月夜书时不重复生成） · 百宝月夜书公开API联动 · 灵魂链接内置 · 世界书工坊 · 主动来信无限 · 可读导出" };
+  var package_default = { name: "tsukiyo-phone", version: "2.9.2", description: "月夜来信 · 独立实现的酒馆拟真社交与生活手机（酒馆助手脚本）：记忆工作台（分层摘要 / 状态账本 / 本地召回 / 楼层收纳） · 楼层记忆归属互斥（交给百宝月夜书时不重复生成） · 百宝月夜书公开API联动 · 灵魂链接内置（不再依赖外部 SoulLink 扩展） · 世界书工坊 · 主动来信无限 · 可读导出" };
 
   // src/core/utils.js
   var VERSION = package_default.version;
@@ -5539,7 +5539,6 @@ ${from.bio.trim()}`;
     }
   };
 
-  // src/core/engine.js
   // src/avs/visual.js — native AVS adapter, no second runtime / polling loop.
   var AVS_SECTIONS = { overview: "概览", face: "外貌", body: "体态", outfit: "穿搭", hair: "发妆", accessory: "配饰", state: "状态" };
   var AVS_FIELDS = {
@@ -7038,15 +7037,6 @@ ${from.bio.trim()}`;
     return stats;
   }
 
-  // ============================================================
-  // v2.6 新增：SoulLink（灵魂链接）联动桥
-  // ① 读取 SoulLink 已保存的角色档案（按聊天绑定）
-  // ② 把手机的交流 / 约定 / 心迹 / 日记等追加进对应角色的「记忆」分节
-  // ③ 提供 SoulLink 可导入的 roster JSON（导出 / 导入）
-  // 默认关闭；所有写入都需要在设置页显式打开。
-  // ============================================================
-  var SOULLINK_SECTIONS = ["性格", "世界观", "家庭背景", "人际关系", "记忆"];
-  var soulDefaults = () => ({ enabled: false, key: "", chatKey: "", push: false, lastAt: 0, lastError: "", found: "", count: 0 });
   // src/services/soul.js — v2.8 内置灵魂链接（NPC 档案与发送前角色推演）
   // ===== 灵魂链接（内置）：NPC 档案系统 + 发送前角色推演 =====
   // 说明：按 SoulLink 的功能模型原生实现（角色档案五节 / AI 增量维护 / 精编 / 发送前推演 / 名单导入导出），
@@ -7659,6 +7649,21 @@ ${from.bio.trim()}`;
       this.eng.events?.emit?.({ type: "status" });
     }
     /** 手机事件（交流 / 约定 / 心迹 / 日记）→ 该角色「记忆」分节。 */
+    /** 导出名单 JSON（「导出名单」按钮走这里；字段与旧版 SoulLink 名单一致，方便迁移） */
+    exportRoster() {
+      const snap = this.eng?.repo?.snapshot || {};
+      let chatKey = "", chatLabel = "";
+      try {
+        const parts = JSON.parse(snap.owner || "[]");
+        if (Array.isArray(parts)) {
+          chatKey = String(parts[2] ?? "");
+          chatLabel = String(parts[1] ?? "");
+        }
+      } catch {
+        chatKey = "";
+      }
+      return soulRosterExport(this.view(), { chatKey, chatLabel });
+    }
     pushPhoneLines(name, lines, { floor = -1 } = {}) {
       const s = this.data();
       if (!s) return 0;
@@ -7712,9 +7717,6 @@ ${from.bio.trim()}`;
   function msData(s) {
     return s?.ms || msFresh();
   }
-  function msMode(v) {
-    return msData(v).cfg ? msData(v) : null;
-  }
   function msNorm(value) {
     return String(value ?? "").replace(/[\s\u3000，。、；：！？…—·“”‘’"'()（）【】\[\]<>《》~～]+/g, "").toLowerCase();
   }
@@ -7755,18 +7757,6 @@ ${from.bio.trim()}`;
     for (const k in b) nb += b[k] * b[k];
     if (!na || !nb) return 0;
     return dot / Math.sqrt(na * nb);
-  }
-  function msKeywordsOf(value, extra = []) {
-    const stop = /* @__PURE__ */ new Set(["什么", "怎么", "这个", "那个", "我们", "你们", "他们", "自己", "现在", "已经", "可以", "还是", "如果", "因为", "所以", "然后", "知道", "觉得", "时候", "东西", "事情"]);
-    const seen = /* @__PURE__ */ new Set(), out = [];
-    for (const item of [...(extra || []), ...msTokens(value)]) {
-      const word = String(item || "").trim();
-      if (word.length < 2 || stop.has(word) || seen.has(word)) continue;
-      seen.add(word);
-      out.push(word);
-      if (out.length >= 12) break;
-    }
-    return out;
   }
   function msActive(tree) {
     const covered = /* @__PURE__ */ new Set();
@@ -8908,297 +8898,7 @@ ${from.bio.trim()}`;
     }
   };
 
-  // src/services/soullink-bridge.js — 外部 SoulLink 扩展桥（v2.6）+ PhoneEngine 组装类
-  var SoulLinkBridge = class {
-    constructor(engine) {
-      this.eng = engine;
-    }
-    get settings() {
-      return this.eng.settings;
-    }
-    prefs() {
-      const ui = this.settings.data.ui || {};
-      return { ...soulDefaults(), ...(isObject(ui.soullink) ? ui.soullink : {}) };
-    }
-    setPrefs(patch) {
-      const next = clone(this.settings.data);
-      next.ui = { ...next.ui, soullink: { ...this.prefs(), ...patch } };
-      this.settings.persist(next);
-      return this.prefs();
-    }
-    ctx() {
-      return this.settings.cloud();
-    }
-    chatKeyGuess() {
-      try {
-        const parts = JSON.parse(this.eng.repo.snapshot?.owner || "[]");
-        return String(parts?.[2] ?? "");
-      } catch {
-        return "";
-      }
-    }
-    contactMatch(name) {
-      const s = this.eng.repo.data;
-      if (!s) return null;
-      return s.contacts.find((c) => c.name === name || (c.aliases || []).includes(name)) || null;
-    }
-    /** 在 extensionSettings 里寻找 SoulLink 的档案盒（兼容不同键名与嵌套层级） */
-    scan() {
-      const out = { found: false, key: "", box: null, chatMap: null, archives: null, chatKey: "", count: 0, names: [], note: "" };
-      const ctx = this.ctx();
-      if (!ctx?.extensionSettings) {
-        out.note = "没有检测到酒馆扩展设置（SoulLink 是酒馆扩展，需要先安装并启用）";
-        return out;
-      }
-      const ext = ctx.extensionSettings;
-      const isArchive = (v) => isObject(v) && (Array.isArray(v.记忆) || isObject(v.记忆) || isObject(v.性格) || isObject(v.世界观) || typeof v.姓名 === "string" || typeof v.name === "string");
-      const isMap = (v) => isObject(v) && Object.values(v).some((x) => isObject(x));
-      const looks = (v) => isObject(v) && (isMap(v.archives) || isMap(v.roster) || isMap(v.characters));
-      let key = this.prefs().key;
-      if (!key || !looks(ext[key])) {
-        for (const k of Object.keys(ext)) if (/soullink|soul[-_ ]?link|灵魂/i.test(k) && looks(ext[k])) {
-          key = k;
-          break;
-        }
-      }
-      if (!key) {
-        for (const k of Object.keys(ext)) if (looks(ext[k])) {
-          key = k;
-          break;
-        }
-      }
-      if (!key) {
-        out.note = "没有找到 SoulLink 的档案数据（extensionSettings 里没有含 archives / roster 的扩展）";
-        return out;
-      }
-      const box = ext[key];
-      let archives = isObject(box.archives) ? box.archives : isObject(box.roster) ? box.roster : isObject(box.characters) ? box.characters : {};
-      let chatMap = null, chatKey = "";
-      const values = Object.values(archives);
-      const flat = values.some(isArchive);
-      if (!flat && values.length) {
-        const cands = Object.entries(archives).filter(([, v]) => isMap(v));
-        if (cands.length) {
-          const want = this.chatKeyGuess();
-          const hit = cands.find(([k]) => k === want) || cands.find(([, v]) => Object.keys(v).some((n) => this.contactMatch(n))) || cands.slice().sort((a, b) => Object.keys(b[1]).length - Object.keys(a[1]).length)[0];
-          chatKey = hit[0];
-          chatMap = archives;
-          archives = hit[1];
-        }
-      }
-      out.found = true;
-      out.key = key;
-      out.box = box;
-      out.chatMap = chatMap;
-      out.chatKey = chatKey;
-      out.archives = archives;
-      out.names = Object.keys(archives);
-      out.count = out.names.length;
-      out.note = "已找到 SoulLink 档案：" + out.count + " 个角色" + (chatKey ? "（聊天 " + chatKey + "）" : "");
-      return out;
-    }
-    /** 读取档案 → 手机联系人资料 / 记忆条目 */
-    async pull() {
-      const scan = this.scan();
-      if (!scan.found) throw Error(scan.note || "没有找到 SoulLink 档案");
-      const snap = this.eng.bridge.capture();
-      let contacts = 0, memories = 0;
-      await this.eng.repo.mutate((s) => {
-        for (const [name, archive] of Object.entries(scan.archives)) {
-          if (!isObject(archive) || ["__proto__", "prototype", "constructor"].includes(name)) continue;
-          const body = SOULLINK_SECTIONS.map((sec) => {
-            const raw = archive[sec];
-            const list = Array.isArray(raw) ? raw : isObject(raw) ? Object.values(raw) : [];
-            const lines = list.map((x) => typeof x === "string" ? x : x?.text || x?.content || "").filter(Boolean);
-            return lines.length ? "【" + sec + "】\n" + lines.map((x) => "· " + String(x).slice(0, 1200)).join("\n") : "";
-          }).filter(Boolean).join("\n\n");
-          let c = this.contactMatch(name);
-          if (!c && body) {
-            assert(s.contacts.length < 300, "联系人已达上限（300）");
-            c = {
-              id: "slc-" + fingerprint([scan.key, name]).slice(0, 12), name: String(name).slice(0, 80), age: Number.isFinite(archive.年龄) ? archive.年龄 : null,
-              tags: ["SoulLink"], status: "由 SoulLink 档案导入", bio: "", extraNotes: "", references: [], aliases: [],
-              recognized: true, reachable: true, proactive: true, allowNarrative: false, color: "sage"
-            };
-            s.contacts.push(c);
-            contacts++;
-          }
-          if (c && body) {
-            const list = (c.references || []).slice(0);
-            const item = { book: "SoulLink 档案", name: name + " · 档案", content: body.slice(0, 16e3) };
-            const i = list.findIndex((r) => r.book === "SoulLink 档案" && r.name === item.name);
-            if (i >= 0) list[i] = item;
-            else if (list.length < 10) list.push(item);
-            else list[9] = item;
-            c.references = list;
-            c.sl = { key: scan.key, chatKey: scan.chatKey, name };
-          }
-          const memRaw = archive.记忆;
-          const memList = Array.isArray(memRaw) ? memRaw : isObject(memRaw) ? Object.values(memRaw) : [];
-          for (const raw of memList) {
-            const t = String(typeof raw === "string" ? raw : raw?.text || raw?.content || "").trim();
-            if (!t || s.memories.length >= 1e3) continue;
-            const mid = "sl-" + fingerprint([scan.key, name, t]).slice(0, 16);
-            if (s.memories.some((m) => m.id === mid)) continue;
-            s.memories.push({
-              id: mid, kind: "manual", title: text(name + " · " + autoTitle(t), 80), text: t.slice(0, 6e3), keys: [name],
-              enabled: true, audience: ["user"], visibility: "private", sources: [{ note: "来自 SoulLink 档案（" + scan.key + "）" }], resolved: false, ts: Date.now(), sl: true
-            });
-            memories++;
-          }
-        }
-        log(s, "ok", "已从 SoulLink 导入：新增联系人 " + contacts + "、记忆 " + memories + " 条", "memory");
-      }, { snapshot: snap, label: "导入 SoulLink 档案" });
-      this.setPrefs({ found: scan.key, count: scan.count, lastAt: Date.now(), lastError: "" });
-      return { contacts, memories, scan };
-    }
-    /** 收集要写回 SoulLink 的手机内容（每条一行，按角色归并） */
-    pushLines() {
-      const s = this.eng.repo.data;
-      if (!s) return new Map();
-      const contactOf = (id2) => s.contacts.find((c) => c.id === id2) || null;
-      const grouped = new Map();
-      const add = (name, line) => {
-        if (!name) return;
-        if (!grouped.has(name)) grouped.set(name, []);
-        const list = grouped.get(name);
-        if (!list.includes(line) && list.length < 60) list.push(line);
-      };
-      for (const t of s.threads) {
-        const rows = t.messages.slice(-5);
-        const targets = t.kind === "group" ? [...new Set(rows.map((m) => contactOf(m.author)?.name).filter(Boolean))] : [contactOf(t.members[0])?.name].filter(Boolean);
-        for (const m of rows) {
-          const who = m.author === "user" ? "玩家" : contactOf(m.author)?.name || "角色";
-          for (const name of targets) add(name, `【小手机·交流】${who}：${String(m.text).replace(/\s+/g, " ").slice(0, 220)}`);
-        }
-      }
-      for (const d of s.diary.slice(-40)) {
-        const name = contactOf(d.author)?.name;
-        if (!name) continue;
-        const kind = d.kind === "heart" ? "心迹" : "日记";
-        add(name, `【小手机·${kind}】${d.date || ""}${d.title ? " " + d.title : ""}：${String(d.text).replace(/\s+/g, " ").slice(0, 260)}`);
-      }
-      for (const a of s.agenda.filter((x) => x.status !== "cancelled").slice(-20)) {
-        for (const name of new Set((a.members || []).map((id2) => contactOf(id2)?.name).filter(Boolean))) add(name, `【小手机·约定】${a.date || ""} ${a.title || ""}：${String(a.detail || a.note || "").slice(0, 160)}`);
-      }
-      return grouped;
-    }
-    /** 手机 → SoulLink：把最近的交流 / 约定 / 心迹 / 日记追加到对应角色的「记忆」分节 */
-    async push({ dry = false } = {}) {
-      const scan = this.scan();
-      if (!scan.found) throw Error(scan.note || "没有找到 SoulLink 档案");
-      const grouped = this.pushLines();
-      const stats = { names: [], written: 0, skipped: 0 };
-      for (const [name, items] of grouped) {
-        const target = scan.archives[name] || (this.contactMatch(name) ? scan.archives[this.contactMatch(name).name] : null);
-        if (!isObject(target)) {
-          stats.skipped += items.length;
-          continue;
-        }
-        const raw = target.记忆;
-        const list = Array.isArray(raw) ? raw : isObject(raw) ? raw : null;
-        const existing = new Set((Array.isArray(list) ? list : list ? Object.values(list) : []).map((x) => typeof x === "string" ? x : x?.text || ""));
-        const fresh = items.filter((x) => !existing.has(x));
-        if (!fresh.length) continue;
-        const rows = fresh.map((x) => ({ id: id("sl"), text: x, floor: (this.eng.bridge.context?.()?.chat || []).length || 0, updatedAt: Date.now() }));
-        if (Array.isArray(list)) list.push(...rows);
-        else if (list) for (const r of rows) list[id("e")] = r;
-        else target.记忆 = rows;
-        stats.names.push(name);
-        stats.written += rows.length;
-      }
-      if (dry) return { dry: true, ...stats };
-      const ctx = this.ctx();
-      assert(ctx?.extensionSettings, "需要酒馆扩展设置接口才能写入 SoulLink");
-      try {
-        ctx.saveSettingsDebounced?.() || ctx.saveSettings?.();
-      } catch (e2) {
-        this.setPrefs({ lastError: "写入后保存失败：" + (e2?.message || e2) });
-      }
-      await this.eng.repo.mutate((d) => {
-        log(d, "ok", "已把小手机记录追加到 SoulLink 档案：" + (stats.names.join("、") || "无匹配角色"), "memory");
-      }, { label: "回写 SoulLink 档案" });
-      this.setPrefs({ lastAt: Date.now(), lastError: "", count: scan.count });
-      return stats;
-    }
-    /** 生成 SoulLink 可导入的 roster JSON（结构与其「导出」一致） */
-    exportRoster() {
-      const s = this.eng.repo.data;
-      const scan = this.scan();
-      const roster = {};
-      for (const c of s.contacts) {
-        if (c.source === "soullink" && (c.references || []).some((r) => r.book === "SoulLink 档案")) continue;
-        const mem = s.memories.filter((m) => (m.keys || []).includes(c.name)).slice(-40).map((m) => ({ id: m.id, text: m.text, floor: 0, updatedAt: m.ts || Date.now() }));
-        const lines = String(c.bio || "").split(/\n{1,}/).map((x) => x.trim()).filter(Boolean);
-        roster[c.name] = {
-          姓名: c.name, 年龄: c.age ?? null, 性别: null, 职业: "",
-          性格: lines.length ? lines : c.bio ? [c.bio] : [],
-          世界观: (c.tags || []).slice(0, 12),
-          家庭背景: [],
-          人际关系: [c.status || "", (c.aliases || []).length ? "别名：" + (c.aliases || []).join("、") : ""].filter(Boolean),
-          记忆: mem.length ? mem : c.extraNotes ? [{ id: id("sl"), text: c.extraNotes, floor: 0, updatedAt: Date.now() }] : [],
-          updatedAt: Date.now()
-        };
-      }
-      return {
-        app: "SoulLink", kind: "roster", version: "1.7.5", exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
-        chatKey: scan.chatKey || this.chatKeyGuess(), chatLabel: this.eng.bridge.context?.()?.name || "",
-        count: Object.keys(roster).length, roster,
-        notice: "由月夜来信·小手机导出；可在 SoulLink 概览页用「导入」并入当前聊天（同名覆盖前会确认）。"
-      };
-    }
-    /** 导入 SoulLink 的 roster / archives / 裸映射文件 */
-    async importRoster(raw) {
-      safeJson(raw);
-      const map = isObject(raw?.roster) ? raw.roster : isObject(raw?.archives) ? raw.archives : isObject(raw?.characters) ? raw.characters : isObject(raw?.data) ? raw.data : raw?.items || raw;
-      assert(isObject(map) && Object.keys(map).length <= 300, "不是兼容的 SoulLink 名单文件");
-      const snap = this.eng.bridge.capture();
-      let contacts = 0, memories = 0;
-      await this.eng.repo.mutate((s) => {
-        for (const [name, archive] of Object.entries(map)) {
-          if (!isObject(archive) || ["__proto__", "prototype", "constructor"].includes(name)) continue;
-          const body = SOULLINK_SECTIONS.map((sec) => {
-            const raw2 = archive[sec];
-            const list = Array.isArray(raw2) ? raw2 : isObject(raw2) ? Object.values(raw2) : [];
-            const lines = list.map((x) => typeof x === "string" ? x : x?.text || x?.content || "").filter(Boolean);
-            return lines.length ? "【" + sec + "】\n" + lines.map((x) => "· " + String(x).slice(0, 1200)).join("\n") : "";
-          }).filter(Boolean).join("\n\n");
-          let c = this.contactMatch(name);
-          if (!c && body) {
-            c = {
-              id: "slc-" + fingerprint([name]).slice(0, 12), name: String(name).slice(0, 80), age: Number.isFinite(archive.年龄) ? archive.年龄 : null,
-              tags: ["SoulLink"], status: "由 SoulLink 文件导入", bio: "", extraNotes: "", references: [], aliases: [],
-              recognized: true, reachable: true, proactive: true, allowNarrative: false, color: "sage"
-            };
-            s.contacts.push(c);
-            contacts++;
-          }
-          if (c && body) {
-            const list = (c.references || []).slice(0);
-            const item = { book: "SoulLink 文件", name: name + " · 档案", content: body.slice(0, 16e3) };
-            const i = list.findIndex((r) => r.book === "SoulLink 文件" && r.name === item.name);
-            if (i >= 0) list[i] = item;
-            else if (list.length < 10) list.push(item);
-            else list[9] = item;
-            c.references = list;
-          }
-          const memRaw = archive.记忆;
-          const memList = Array.isArray(memRaw) ? memRaw : isObject(memRaw) ? Object.values(memRaw) : [];
-          for (const r of memList) {
-            const t = String(typeof r === "string" ? r : r?.text || r?.content || "").trim();
-            if (!t || s.memories.length >= 1e3) continue;
-            const mid = "sl-" + fingerprint([name, t]).slice(0, 16);
-            if (s.memories.some((m) => m.id === mid)) continue;
-            s.memories.push({ id: mid, kind: "manual", title: text(name + " · " + autoTitle(t), 80), text: t.slice(0, 6e3), keys: [name], enabled: true, audience: ["user"], visibility: "private", sources: [{ note: "来自 SoulLink 名单文件" }], resolved: false, ts: Date.now(), sl: true });
-            memories++;
-          }
-        }
-        log(s, "ok", "已导入 SoulLink 名单：新增联系人 " + contacts + "、记忆 " + memories + " 条", "memory");
-      }, { snapshot: snap, label: "导入 SoulLink 名单文件" });
-      return { contacts, memories };
-    }
-  };
-
+  // src/core/engine.js — PhoneEngine 组装类：把仓储 / 设置 / 通道 / 日程 / 各子模块串成一个引擎
   var PhoneEngine = class {
     constructor(bridge) {
       this.bridge = bridge;
@@ -9216,7 +8916,6 @@ ${from.bio.trim()}`;
       this.arc = new ArcAuto(this);
       this.memoryBook = new MemoryBook(this);
       this.bookStudio = new BookStudio(this);
-      this.soullink = new SoulLinkBridge(this);
       this.soul = new SoulStudio(this);
       this.baibai = new BaiBaiLink(this);
       this.ms = new MemoryStudio(this);
@@ -10249,18 +9948,6 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
     assert(fingerprint(ui.engine.repo.choose(snap)) === snap.phoneDigest, "确认期间手机有新消息/修改，未覆盖，请重新预览");
     await restoreBackup(ui.engine.repo, ui.engine.media, inspected, snap);
     ui.notify("已恢复并回读确认。后台保持关闭，请先核对配置。");
-  }
-  async function oldPhone(ui) {
-    const snap = snapshot(ui);
-    assert(snap.legacy, "当前聊天没有找到旧版“手机终端”记录");
-    const inspected = inspectLegacy(snap.legacy), q = inspected.summary;
-    const okay = await ui.confirm("导入当前卡的旧手机", `可识别${q.direct}个私聊、${q.groups}个群聊、${q.notes}条便签、${q.history}份过往。
-
-会保留完整原件归档，再接入新手机。原变量不改，不重复导入同一份记录。未适配字段与${q.photos}张旧留影的原始资料仍在归档中，不伪称已转换图片。`, "保留原件并导入");
-    if (!okay) return;
-    still(ui, snap);
-    await change(ui, (s) => importLegacy(s, inspected, { active: true }), "导入原手机记录", snap);
-    ui.notify("旧手机原件已归档，可在记忆库导出。");
   }
   async function handleAction(ui, action, value, target) {
     const engine = ui.engine;
@@ -11448,69 +11135,6 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
         ui.notify("已按世界书状态同步。");
         return;
       }
-      case "soullink-toggle": {
-        const p = ui.engine.soullink.prefs();
-        const next = ui.engine.soullink.setPrefs({ enabled: !p.enabled });
-        ui.notify(next.enabled ? "SoulLink 联动已启用（读取档案）。" : "SoulLink 联动已关闭。");
-        return;
-      }
-      case "soullink-write": {
-        const p = ui.engine.soullink.prefs();
-        const next = ui.engine.soullink.setPrefs({ push: !p.push });
-        ui.notify(next.push ? "已允许写回 SoulLink（向角色的「记忆」分节追加小手机条目）。" : "已停止写回 SoulLink。");
-        return;
-      }
-      case "soullink-scan": {
-        const scan = ui.engine.soullink.scan();
-        ui.notify(scan.note || (scan.found ? "已检测到 SoulLink 档案。" : "没有检测到 SoulLink。"));
-        return;
-      }
-      case "soullink-pull": {
-        if (!await ui.confirm("导入 SoulLink 档案到手机？", "会把 SoulLink 里已登记的角色档案读成手机联系人资料与记忆条目（带 SoulLink 标记，不会写进记忆世界书）。同名联系人只追加资料，不覆盖人设。", "导入")) return;
-        try {
-          const res = await ui.engine.soullink.pull();
-          ui.notify(`已导入：新增联系人 ${res.contacts} 个、记忆 ${res.memories} 条。`);
-        } catch (err) {
-          ui.notify(err?.message || "导入失败", "error");
-        }
-        return;
-      }
-      case "soullink-push": {
-        const p = ui.engine.soullink.prefs();
-        if (!p.push) {
-          ui.notify("请先打开「允许把手机记录写回 SoulLink」。", "error");
-          return;
-        }
-        if (!await ui.confirm("把手机记录写回 SoulLink？", "会把最近的交流、约定、恋爱心迹与日记追加到对应角色的「记忆」分节（每条带「小手机」标记，重复内容不会重复写）。这是对另一个扩展设置的写入，建议先在 SoulLink 里导出一次名单做备份。", "写回")) return;
-        try {
-          const res = await ui.engine.soullink.push();
-          ui.notify(res.written ? `已写回 ${res.written} 条到：${res.names.join("、")}` : "没有新的内容需要写回。");
-        } catch (err) {
-          ui.notify(err?.message || "写回失败", "error");
-        }
-        return;
-      }
-      case "soullink-export":
-        download(ui, "soullink-roster-" + new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19) + ".json", ui.engine.soullink.exportRoster());
-        return;
-      case "soullink-import": {
-        const file = await ui.pickFile(".json,application/json", 8 * 1024 * 1024);
-        if (!file) return;
-        let raw;
-        try {
-          raw = JSON.parse(await file.text());
-        } catch {
-          ui.notify("不是有效的 JSON 文件。", "error");
-          return;
-        }
-        try {
-          const res = await ui.engine.soullink.importRoster(raw);
-          ui.notify(`已导入名单：新增联系人 ${res.contacts} 个、记忆 ${res.memories} 条。`);
-        } catch (err) {
-          ui.notify(err?.message || "导入失败", "error");
-        }
-        return;
-      }
       case "soul-toggle": {
         const soul = engine.soul, on = !ui.data.soul.enabled;
         await change(ui, (s) => {
@@ -11662,19 +11286,6 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
           stats = soulRosterImport(soulData(s), raw);
         }, "导入灵魂链接名单");
         ui.notify("导入完成：新增/覆盖 " + stats.characters + " 个角色，新增 " + stats.entries + " 条（重复跳过 " + stats.skipped + "）。");
-        return;
-      }
-      case "soul-import-extension": {
-        const sl = engine.soullink;
-        assert(sl, "不可用");
-        const scan = sl.scan();
-        assert(scan.found, scan.note || "没有在扩展设置里找到 SoulLink 档案");
-        const roster = sl.exportRoster();
-        let stats = null;
-        await change(ui, (s) => {
-          stats = soulRosterImport(soulData(s), roster.roster ? { roster: roster.roster } : roster);
-        }, "从 SoulLink 扩展导入档案");
-        ui.notify("已从已装的 SoulLink 导入 " + stats.characters + " 个角色、新增 " + stats.entries + " 条。");
         return;
       }
       case "soul-preset": {
@@ -12574,10 +12185,6 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
   }
 
   // src/ui/views-planner.js
-  function plannerView(ui) {
-    const s = ui.data, active = s.activePlan ? s.plans.find((p) => p.id === s.activePlan.id) : null, rows = [...s.plans].reverse();
-    return `<div class="pad"><div class="eyebrow">A LITTLE ROOM FOR TOMORROW</div><h2 style="font-size:24px;margin:5px 0 7px;letter-spacing:1px">给未来，留一点余地。</h2><p class="muted tiny" style="margin-bottom:15px">方向可以提前准备，故事仍由你亲自经历。</p><div class="segmented"><button class="${s.settings.planningMode === "manual" ? "active" : ""}" data-action="plan-mode" data-id="manual">${icon("people", 14)} 我来选择</button><button class="${s.settings.planningMode === "auto" ? "active" : ""}" data-action="plan-mode" data-id="auto">${icon("spark", 14)} 自动选方向</button></div>${hint(s.settings.planningMode === "auto" ? "自动模式：没有正在采用的方向时，后台从新候选中选择；隐藏注入正文，不列出规划清单，也不替你执行。" : "手动模式：后台准备候选，你选择之后才引导正文。未选择的方向不作为已经发生的经历。")}${!s.settings.auto.enabled ? '<button class="tap-text" data-action="go" data-id="automation">后台目前关闭 · 点此设置自动任务</button>' : ""}${arcLegacyExtra(ui)}${button(icon("spark", 15) + " 生成新的未来方向", "generate-plan", "", "primary wide")}${s.plans.length ? tpDeleteBar("plans", s.plans.length, "方向") : ""}${active ? section("正在沿着这条方向", planCard(ui, active, true)) : ""}${section("候选与方向档案", rows.filter((p) => p.id !== active?.id).length ? rows.filter((p) => p.id !== active?.id).map((p) => planCard(ui, p, false)).join("") : empty("故事还没决定下一页", "可以现在生成，或开启后台，让新方向慢慢出现。", "compass"))}</div>`;
-  }
   function planCard(ui, p, active) {
     const s = ui.data;
     return `<article class="card plan-card"><div class="plan-number">${e(p.tone || "日常")} · ${p.beats.length} 个留白的片段 ${active ? tag("已采用") : tag({ candidate: "待选择", paused: "已暂停", completed: "已收束", cancelled: "已取消" }[p.status] || p.status)}</div><h3 class="plan-title">${e(p.title)}</h3><p class="muted">${e(p.summary)}</p><div class="plan-members">${p.members.slice(0, 4).map((id2) => avatar(s.contacts.find((c) => c.id === id2), "small")).join("")}<span>${p.members.length ? e(p.members.map((id2) => contactName(s, id2)).join("、")) : "独自的小安排"}</span></div><div class="buttons">${button("看看这条方向 " + icon("arrow", 13), "plan-detail", p.id, active ? "primary" : "")}${!active && ["candidate", "paused"].includes(p.status) ? button("采用", "adopt-plan", p.id, "primary") : ""}${button("删除", "delete-plan", p.id, "danger")}</div></article>`;
@@ -12777,24 +12384,12 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
       ${hint("世界书是最稳的“跨模型记忆”：绑定到角色卡后，正文模型会按酒馆的触发规则读到这些条目；不需要时逐类关掉即可。")}
     </div>`;
   }
-  function soullinkCard(ui) {
-    const sl = ui.engine.soullink, p = sl.prefs();
-    let scan = null;
-    try {
-      scan = sl.scan();
-    } catch (err) {
-      scan = { note: "检测失败：" + (err?.message || err) };
-    }
-    const status = scan?.found ? scan.note : scan?.note || "未检测到";
-    return `<div class="card"><h3 style="margin:0 0 6px">SoulLink 联动（灵魂链接）</h3><p class="tiny muted">${e(status)}</p>${switchRow("启用联动", "检测到 SoulLink（酒馆扩展）时读取其角色档案；本页所有写入都需要你先打开开关", "soullink-toggle", !!p.enabled)}${switchRow("允许把手机记录写回 SoulLink", "把最近的交流、约定、恋爱心迹与日记追加到对应角色的「记忆」分节；不修改其他内容", "soullink-write", !!p.push)}<div class="buttons">${button("检测 / 刷新", "soullink-scan")}${button(icon("download", 14) + " 导入档案到手机", "soullink-pull", "", "primary")}${button(icon("upload", 14) + " 写回 SoulLink", "soullink-push")}</div><div class="buttons">${button("导出 SoulLink 名单（JSON）", "soullink-export")}${button("导入 SoulLink 名单（JSON）", "soullink-import")}</div><p class="form-note">读法：只读取 extensionSettings 里 SoulLink 自己的档案数据（含 archives / roster 的键），不改动它的其它设置；写法：仅在你打开写回开关后，向其「记忆」分节追加带「小手机」标记的短条目，并触发酒馆保存设置。导出 / 导入使用与 SoulLink 概览页相同的 roster JSON，兼容它的「导入」按钮。</p></div>`;
-  }
-
   function soulCard(ui) {
     const s = ui.data;
     if (!s) return "";
     const soul = ui.engine.soul, v = soulData(s), info = soul.info();
     const modeLabel = { off: "关闭", manual: "仅手动 / 手机内发送时", barrier: "拦截正文发送按钮" }[v.roleplay?.mode || "manual"];
-    return `<div class="card"><h3 style="margin:0 0 6px">灵魂链接（内置）</h3><p class="tiny muted">给小手机里的每个角色维护一份长期档案（性格 / 世界观 / 家庭背景 / 人际关系 / 记忆），用你自己的 API 方案做增量更新与精编；发送前可为在场角色并发推演内心状态，注入到正文提示里。档案还能一键写成世界书条目（世界书工坊的「灵魂链接档案」）。</p>${switchRow("启用灵魂链接", "存档里保存名单与档案；与外部 SoulLink 扩展可共存，功能重叠时建议只开一边", "soul-toggle", v.enabled)}${info.enabled ? settingLink("打开灵魂链接（" + info.characters + " 人 · " + info.entries + " 条）", "go", "heart", "档案 / 推演 / 名单导入导出", "soul") : ""}<p class="form-note">当前：档案自动维护${v.auto?.enabled ? "开" : "关"} · 角色推演${v.roleplay?.enabled ? "开（" + modeLabel + "）" : "关"}${info.lastError ? " · 上次问题：" + e(info.lastError) : ""}</p></div>`;
+    return `<div class="card"><h3 style="margin:0 0 6px">灵魂链接（内置）</h3><p class="tiny muted">给小手机里的每个角色维护一份长期档案（性格 / 世界观 / 家庭背景 / 人际关系 / 记忆），用你自己的 API 方案做增量更新与精编；发送前可为在场角色并发推演内心状态，注入到正文提示里。档案还能一键写成世界书条目（世界书工坊的「灵魂链接档案」）。</p>${switchRow("启用灵魂链接", "档案存在手机存档里，随备份与云同步一起走；不依赖任何外部扩展", "soul-toggle", v.enabled)}${info.enabled ? settingLink("打开灵魂链接（" + info.characters + " 人 · " + info.entries + " 条）", "go", "heart", "档案 / 推演 / 名单导入导出", "soul") : ""}<p class="form-note">当前：档案自动维护${v.auto?.enabled ? "开" : "关"} · 角色推演${v.roleplay?.enabled ? "开（" + modeLabel + "）" : "关"}${info.lastError ? " · 上次问题：" + e(info.lastError) : ""}</p></div>`;
   }
   function soulRow(ui, row) {
     const soul = ui.engine.soul, n = soulEntryCount(row);
@@ -12806,11 +12401,11 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
     const rows = Object.values(v.roster).sort((a2, b) => (b.updatedAt || 0) - (a2.updatedAt || 0));
     const history = [...(v.history || [])].reverse().slice(0, 5);
     const logs = [...(v.log || [])].reverse().slice(0, 10);
-    const head = `<div class="card"><h3 style="margin:0 0 6px">灵魂链接</h3><p class="tiny muted">档案按「聊天」保存在手机存档里（随备份一起走）。每个人各自独立调用一次模型，最多并发 ${v.cfg.concurrency} 个、单个 ${Math.round(v.cfg.timeoutMs / 1000)} 秒超时；每次只把最近 ${v.cfg.contextMessages} 条正文和 ta 自己的档案发给模型。</p>${switchRow("启用灵魂链接", "关闭后不调用、不注入，档案仍保留在存档里", "soul-toggle", v.enabled)}${info.enabled ? `<div class="buttons">${button("更新全部档案", "soul-analyze-all", "", "primary")}${button("推演本轮角色", "soul-roleplay")}${button("清除推演注入", "soul-roleplay-clear")}${button("从通讯录登记角色", "soul-import-contacts")}</div><div class="buttons">${button(icon("download", 14) + " 导出名单", "soul-export")}${button(icon("upload", 14) + " 导入名单", "soul-import")}${button("从已装的 SoulLink 档案导入", "soul-import-extension")}</div><p class="form-note">导出为 SoulLink 同名格式（app/kind/roster），可直接给外部扩展用；导入同样兼容它的 roster / archives / characters 结构。</p>` : ""}</div>`;
+    const head = `<div class="card"><h3 style="margin:0 0 6px">灵魂链接</h3><p class="tiny muted">档案按「聊天」保存在手机存档里（随备份一起走）。每个人各自独立调用一次模型，最多并发 ${v.cfg.concurrency} 个、单个 ${Math.round(v.cfg.timeoutMs / 1000)} 秒超时；每次只把最近 ${v.cfg.contextMessages} 条正文和 ta 自己的档案发给模型。</p>${switchRow("启用灵魂链接", "关闭后不调用、不注入，档案仍保留在存档里", "soul-toggle", v.enabled)}${info.enabled ? `<div class="buttons">${button("更新全部档案", "soul-analyze-all", "", "primary")}${button("推演本轮角色", "soul-roleplay")}${button("清除推演注入", "soul-roleplay-clear")}${button("从通讯录登记角色", "soul-import-contacts")}</div><div class="buttons">${button(icon("download", 14) + " 导出名单", "soul-export")}${button(icon("upload", 14) + " 导入名单", "soul-import")}</div><p class="form-note">导出为通用名单 JSON（app / kind / roster，字段与旧版 SoulLink 名单一致），方便你从以前的文件迁入；导入同样兼容 roster / archives / characters 结构。</p>` : ""}</div>`;
     if (!info.enabled) return `<div class="pad">${head}${hint("启用后，先在下面的名单里登记角色（可从通讯录一键登记）。")}</div>`;
     const cfgCard = `<form data-form="soul"><div class="card"><h3 style="margin:0 0 6px">调用与推演参数</h3><div class="two-cols">${field("并发上限 1—8", "concurrency", v.cfg.concurrency, { type: "number" })}${field("单个请求超时（秒）5—180", "timeoutSec", Math.round(v.cfg.timeoutMs / 1000), { type: "number" })}${field("上下文条数 1—20", "contextMessages", v.cfg.contextMessages, { type: "number" })}${field("独白字数上限 80—800", "maxChars", v.cfg.maxChars, { type: "number" })}${field("注入深度 0—10", "injectDepth", v.cfg.injectDepth, { type: "number" })}${field("每节条目上限 10—60", "maxEntriesPerSection", v.cfg.maxEntriesPerSection, { type: "number" })}</div><p class="form-note">“注入深度”= 距离最新一条消息的层数：4 表示插在最后 4 条消息附近，越小越靠后（越容易被模型当成最近上下文）。</p><button type="submit" class="btn primary wide">保存参数</button></div></form>`;
     const autoCard = `<div class="card"><h3 style="margin:0 0 6px">自动维护与推演</h3>${switchRow("自动更新档案", "每次主线新回复结束后，先做预筛，再只更新有变化的角色；计入后台调用预算", "soul-auto-toggle", !!v.auto.enabled)}${switchRow("发送前角色推演", "为在场 / 最近出现的角色并发生成内心独白，注入正文提示（生成结束后自动清除）", "soul-roleplay-toggle", !!v.roleplay.enabled)}<div class="buttons">${button("推演方式：" + ({ off: "关闭", manual: "手动", barrier: "拦截发送按钮" }[v.roleplay?.mode || "manual"]), "soul-mode")}${button("预筛方式：" + (v.auto?.gateMode === "ai" ? "模型预筛" : "本地关键词"), "soul-gate-mode")}</div><p class="form-note">推演方式选「拦截发送按钮」时，点酒馆发送会先等推演完成再放行（最多 ${Math.round(v.cfg.timeoutMs / 1000)} 秒，失败就照常发送）；手机内给角色发消息时也会自动推演。不想被打断就用默认的「手动」。</p></div>`;
-    const presetCard = `<div class="card"><h3 style="margin:0 0 6px">提示词预设</h3>${SOUL_PROMPT_KEYS.map((k) => `<div class="buttons" style="align-items:center">${button(SOUL_PROMPT_LABELS[k] + "：" + e(text(v.presets?.[k] || SOUL_DEFAULT_PROMPTS[k], 24)) + "…", "soul-preset", k)}${v.presets?.[k] !== void 0 ? button("恢复默认", "soul-preset-reset", k) : ""}</div>`).join("")}<div class="buttons">${button("导出提示词", "soul-presets-export")}${button("导入提示词", "soul-presets-import")}</div><p class="form-note">四套提示词可以照自己的口味改；也可以把外部 SoulLink 的预设文本粘进来（这里不复制它的代码与文本，只提供同样的可编辑位）。</p></div>`;
+    const presetCard = `<div class="card"><h3 style="margin:0 0 6px">提示词预设</h3>${SOUL_PROMPT_KEYS.map((k) => `<div class="buttons" style="align-items:center">${button(SOUL_PROMPT_LABELS[k] + "：" + e(text(v.presets?.[k] || SOUL_DEFAULT_PROMPTS[k], 24)) + "…", "soul-preset", k)}${v.presets?.[k] !== void 0 ? button("恢复默认", "soul-preset-reset", k) : ""}</div>`).join("")}<div class="buttons">${button("导出提示词", "soul-presets-export")}${button("导入提示词", "soul-presets-import")}</div><p class="form-note">四套提示词可以照自己的口味改；也可以把任意现成提示词粘进来，改完点保存即可。</p></div>`;
     const listCard = `<div class="card"><h3 style="margin:0 0 6px">角色名单（${rows.length} 人 · ${info.entries} 条）</h3><div class="buttons">${button("手动添加角色", "soul-add-char", "", "primary")}${button("从通讯录登记", "soul-import-contacts")}</div></div>` + (rows.length ? rows.map((r) => soulRow(ui, r)).join("") : empty("名单还是空的", "从通讯录一键登记，或手动添加角色，然后点「更新档案」让模型读正文开始积累。", "heart"));
     const histCard = history.length || logs.length ? `<div class="card"><h3 style="margin:0 0 6px">最近推演与日志</h3>${history.map((h) => `<p class="tiny muted" style="margin:6px 0"><b>#${(h.floor ?? 0) + 1}楼</b> · ${e(autoAgo(h.ts))} · ${e((h.actors || []).map((a2) => a2.name).join("、") || "无")}${h.ok === false ? " · 注入未就绪" : ""}</p>${(h.actors || []).map((a2) => `<details class="details"><summary>${e(a2.name)} 的内心独白</summary><p>${e(a2.text)}</p></details>`).join("")}`).join("")}${logs.map((l) => `<p class="tiny muted" style="margin:4px 0">${e(autoAgo(l.ts))} · ${e(l.text)}</p>`).join("")}<div class="buttons">${button("清空日志", "soul-log-clear")}</div></div>` : "";
     return `<div class="pad">${head}${cfgCard}${autoCard}${listCard}${presetCard}${histCard}${hint("与「记忆模块 / 记忆世界书」的分工：灵魂链接管的是“这个角色本身是谁、记得什么”，记忆模块管的是“发生过的事、尚未了结的约定”。两者可以同时开，但同一段内容不要两边都注入。")}</div>`;
@@ -12829,7 +12424,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
 
   function settingsView(ui) {
     const s = ui.data, c = ui.engine.settings.data, bridge = ui.engine.bridge, bb = ui.engine.baibai ? ui.engine.baibai.status() : null;
-    return `<div class="pad"><div class="card"><div style="display:flex;align-items:center;gap:12px"><span class="avatar sage">${icon("moon", 23)}</span><div><h3 style="margin:0">月夜来信</h3><small>TSUKIYO PHONE · ${VERSION}</small></div></div><div class="divider"></div><p class="tiny muted">${bridge.mode === "demo" ? "当前为离线演示。模拟消息不会写入真实酒馆。" : "手机与当前角色聊天相连；不把界面状态冒充主线事实。"}</p></div><div class="card">${settingLink("API方案与模块分配", "go", "settings", c.profiles.length + " 个方案" + (Object.keys(MODULES).filter((k) => !ui.engine.settings.isEnabled(k)).length ? " · " + Object.keys(MODULES).filter((k) => !ui.engine.settings.isEnabled(k)).length + " 个模块已关闭" : ""), "api")}${switchRow("正文下显示剧情规划条", "在最新一条角色回复下方显示当前面·线·点，可一键打开或推进；状态栏脚本也可读取 __TSUKIYO_PHONE__.plan()", "plan-strip", c.ui.planStrip !== false)}${settingLink("自定义提示词", "edit-prompt", "note", c.prompt?.enabled && c.prompt.text ? "已启用 · 每次请求最先发送" : "未启用")}${settingLink("后台、来信与剧情方向", "go", "bell", s?.settings.auto.enabled ? "已开启" : "未开启", "automation")}${settingLink("备份与恢复", "go", "download", "只操作本手机", "backup")}${settingLink("运行记录", "go", "file", "任务与失败可追踪", "logs")}${settingLink("存档与规划状态", "go", "memory", "三层存档 · 自动推进", "diag")}${settingLink("正文注入检查", "inspect-injection", "memory", bridge.injectionReady ? "接口已就绪" : "尚未确认")}</div><div class="card">${switchRow("夜间阅读", "只改变手机外观，不改变剧情时间", "theme", c.theme === "night")}${s ? switchRow("角色卡人物全部解锁", "月夜来信卡的全部联系人直接可用；关闭后按剧情逐个解锁", "unlock-all", s.settings.unlockAll) : ""}${s ? switchRow("正文记忆联动", "已发生的交流与知情范围写入隐藏参考", "inject", s.settings.inject) : ""}${s ? switchRow("读取可知情的正文", "在场角色/明确允许的联系人可参考近期正文；其他私聊不混入", "read-narrative", s.settings.readNarrative) : ""}</div><div class="card"><h3 style="margin:0 0 6px">柏宝书联动</h3><p class="tiny muted">${e(bb ? bb.text : "不可用")}</p>${switchRow("启用柏宝书联动", "检测到「百宝月夜书」(≥1.3.0) 时双向联动；关闭后手机完全独立运行", "baibai-enabled", !!bb?.prefs.enabled)}${switchRow("使用柏宝书记忆生成（实时读取）", "聊天、主动来信、朋友圈/评论、日记、备忘、清单、日历、规划与记忆整理可参考柏宝书；关闭后不再读取，也不使用带柏宝书标记的导入记忆。公开动态/群聊只取有限本人资料，不公开全局私密摘要", "baibai-brief", !!bb?.prefs.brief)}${switchRow("在场人物兜底", "主线变量没有“当前互动NPC”时，采用柏宝书推断的在场人物", "baibai-present", !!bb?.prefs.present)}${switchRow("手机交流回写柏宝书", "新消息、约定、动态、未完约定推送到柏宝书的【小手机】外部记录，参与其正文注入与摘要；不会改动柏宝书自身的记忆", "baibai-push", !!bb?.prefs.push)}<div class="buttons">${button("立即回写", "baibai-push-now")}${button("导入柏宝书记忆", "baibai-import-memory")}${button("导入柏宝书 API 方案", "baibai-import-api")}${button("经柏宝书测活渠道", "baibai-test")}</div><p class="form-note">只读取柏宝书公开的 window.STBaiBaiBook.phone 接口；柏宝书密钥不经过手机（“导入方案”除外，它会复制一份密钥到本机）。</p></div>${soullinkCard(ui)}${soulCard(ui)}<p class="form-note">独立扩展与卡内脚本二选一即可；同页重复加载会复用实例。后台仅在酒馆页面仍开着时运行，标签页可能受浏览器节流。所有自动生成都计入你设置的调用预算。</p></div>`;
+    return `<div class="pad"><div class="card"><div style="display:flex;align-items:center;gap:12px"><span class="avatar sage">${icon("moon", 23)}</span><div><h3 style="margin:0">月夜来信</h3><small>TSUKIYO PHONE · ${VERSION}</small></div></div><div class="divider"></div><p class="tiny muted">${bridge.mode === "demo" ? "当前为离线演示。模拟消息不会写入真实酒馆。" : "手机与当前角色聊天相连；不把界面状态冒充主线事实。"}</p></div><div class="card">${settingLink("API方案与模块分配", "go", "settings", c.profiles.length + " 个方案" + (Object.keys(MODULES).filter((k) => !ui.engine.settings.isEnabled(k)).length ? " · " + Object.keys(MODULES).filter((k) => !ui.engine.settings.isEnabled(k)).length + " 个模块已关闭" : ""), "api")}${switchRow("正文下显示剧情规划条", "在最新一条角色回复下方显示当前面·线·点，可一键打开或推进；状态栏脚本也可读取 __TSUKIYO_PHONE__.plan()", "plan-strip", c.ui.planStrip !== false)}${settingLink("自定义提示词", "edit-prompt", "note", c.prompt?.enabled && c.prompt.text ? "已启用 · 每次请求最先发送" : "未启用")}${settingLink("后台、来信与剧情方向", "go", "bell", s?.settings.auto.enabled ? "已开启" : "未开启", "automation")}${settingLink("备份与恢复", "go", "download", "只操作本手机", "backup")}${settingLink("运行记录", "go", "file", "任务与失败可追踪", "logs")}${settingLink("存档与规划状态", "go", "memory", "三层存档 · 自动推进", "diag")}${settingLink("正文注入检查", "inspect-injection", "memory", bridge.injectionReady ? "接口已就绪" : "尚未确认")}</div><div class="card">${switchRow("夜间阅读", "只改变手机外观，不改变剧情时间", "theme", c.theme === "night")}${s ? switchRow("角色卡人物全部解锁", "月夜来信卡的全部联系人直接可用；关闭后按剧情逐个解锁", "unlock-all", s.settings.unlockAll) : ""}${s ? switchRow("正文记忆联动", "已发生的交流与知情范围写入隐藏参考", "inject", s.settings.inject) : ""}${s ? switchRow("读取可知情的正文", "在场角色/明确允许的联系人可参考近期正文；其他私聊不混入", "read-narrative", s.settings.readNarrative) : ""}</div><div class="card"><h3 style="margin:0 0 6px">柏宝书联动</h3><p class="tiny muted">${e(bb ? bb.text : "不可用")}</p>${switchRow("启用柏宝书联动", "检测到「百宝月夜书」(≥1.3.0) 时双向联动；关闭后手机完全独立运行", "baibai-enabled", !!bb?.prefs.enabled)}${switchRow("使用柏宝书记忆生成（实时读取）", "聊天、主动来信、朋友圈/评论、日记、备忘、清单、日历、规划与记忆整理可参考柏宝书；关闭后不再读取，也不使用带柏宝书标记的导入记忆。公开动态/群聊只取有限本人资料，不公开全局私密摘要", "baibai-brief", !!bb?.prefs.brief)}${switchRow("在场人物兜底", "主线变量没有“当前互动NPC”时，采用柏宝书推断的在场人物", "baibai-present", !!bb?.prefs.present)}${switchRow("手机交流回写柏宝书", "新消息、约定、动态、未完约定推送到柏宝书的【小手机】外部记录，参与其正文注入与摘要；不会改动柏宝书自身的记忆", "baibai-push", !!bb?.prefs.push)}<div class="buttons">${button("立即回写", "baibai-push-now")}${button("导入柏宝书记忆", "baibai-import-memory")}${button("导入柏宝书 API 方案", "baibai-import-api")}${button("经柏宝书测活渠道", "baibai-test")}</div><p class="form-note">只读取柏宝书公开的 window.STBaiBaiBook.phone 接口；柏宝书密钥不经过手机（“导入方案”除外，它会复制一份密钥到本机）。</p></div>${soulCard(ui)}<p class="form-note">独立扩展与卡内脚本二选一即可；同页重复加载会复用实例。后台仅在酒馆页面仍开着时运行，标签页可能受浏览器节流。所有自动生成都计入你设置的调用预算。</p></div>`;
   }
   function apiView(ui) {
     const store = ui.engine.settings, c = store.data;
