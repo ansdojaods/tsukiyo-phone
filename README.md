@@ -1,69 +1,51 @@
-# 月夜来信 · 小手机（Tsukiyo Phone）v1.6.3
+# 月夜来信 · 小手机 v2.5
 
-SillyTavern「酒馆助手」脚本：在酒馆里运行的一整套手机 UI（联系人 / 聊天 / 朋友圈 / 相册 / 记忆 / 剧情规划 / API 方案管理等），原创实现，不含用户 API 密钥或聊天存档。
+适用于 SillyTavern / 酒馆助手的独立小手机，支持可选柏宝书联动。内部版本 `2.5.0`。
 
-当前版本：**v1.6.3（百宝月夜书联动）**
+## 本次更新
 
-## 直接使用（不需要构建）
+- **可编辑视觉资料库**：290条原资料可编辑、停用、恢复；支持自建、搜索、JSON导入导出，明确控制哪些规则参与模型分析。
+- **事件导演**：候选池、概率/权重、同轮防重复、分阶段钩子；只有当前阶段可注入，不透露后续或作者后台。
+- **众生侧写**：本轮确认离场后最多3人一次生成，结果为可收藏的草稿，不自动变成主线事实。
+- **审核式世界状态**：有正文依据才提议增量，用户批准后保存；不改人物性格、关系基线或MVU。
+- **本存档亲历记忆**：按联系人知情范围取用，不自动跨卡带入同伴与记忆。
 
-- **独立版**：SillyTavern 酒馆助手 → 脚本库 → 导入 [`dist/月夜来信小手机_酒馆助手导入版_v1.6.3_柏宝书联动.json`](dist/月夜来信小手机_酒馆助手导入版_v1.6.3_柏宝书联动.json)，任何角色可用；
-- **角色卡版**：使用内置了同版本小手机的角色卡（角色卡 JSON 含整张卡与世界书，不放在本仓库）。
+这不是把五个插件同时装进手机。新代码共用手机自己的API、任务队列、UI和存档。新增推演仅手动触发，新增正文注入默认关闭；原有功能设置保留。
 
-## 与百宝月夜书联动（可选）
+## 安装
 
-安装[百宝月夜书扩展](https://github.com/ansdojaods/ST-BaiBai-Book-Tsukiyo)后自动获得双向联动，两边都无需配置：
+导入 [`releases/月夜来信小手机_酒馆助手导入版_v2.5_剧情工作台.json`](releases/月夜来信小手机_酒馆助手导入版_v2.5_剧情工作台.json)。先备份卡/聊天/手机，停用旧手机副本与重复的AVS或事件/NPC后台。
 
-- 扩展 → 手机：剧情时间 / 地点 / 在场人物兜底；分层摘要、锚点日记、未了结计划、NPC 档案进入人物生成与规划上下文（遵守知情边界）；
-- 手机 → 扩展：消息 / 约定 / 动态回写为【小手机】外部记录；一键导入柏宝书记忆；互相导入 API 方案；经柏宝书测活渠道（密钥不经手机）。
+**卡内手机与独立手机二选一。** 大奉定制卡请用随卡升级版本，不要用通用JS覆盖其专用开场/联系人/三清适配。大奉卡另行交付，不收进公开源码仓库。
 
-联动接口是 `window.STBaiBaiBook.phone` 与 `st-baibai-book:*` 事件，协议详见扩展仓库的 `docs/PHONE_BRIDGE.md`。不装扩展时，手机一切功能照常独立运行。
+入口：手机桌面 → **视觉档案 → 编辑视觉资料库**；或 → **剧情工作台**。原“剧情规划”内也有工作台入口。
 
-## 仓库结构
+## 说明
 
-```
-tsukiyo-phone/
-├── base/tsukiyo-phone-1.5.2.js      1.5.2 原版基线（未改动的打包脚本）
-├── patch/
-│   ├── apply_phone_patch.py         补丁脚本：1.5.2 → 1.6.3（锚点式文本补丁，每个锚点必须且只能命中一次）
-│   ├── baibai_module.js             联动核心模块：查找百宝月夜书、简报缓存、时间/地点回退、回写、导入记忆/API 方案、测活
-│   ├── baibai_actions.js            设置页联动卡片的动作（开关、立即回写、导入、测活）
-│   ├── build_json.py                把打好补丁的脚本写回 导入版 JSON / 角色卡 JSON
-│   └── standalone-template.json     导入版 JSON 模板
-├── tsukiyo-phone-1.6.3.js           打完补丁的完整脚本（= dist 导入 JSON 的 content 字段）
-├── dist/月夜来信小手机_酒馆助手导入版_v1.6.3_柏宝书联动.json   酒馆助手「导入脚本」用
-├── test/
-│   ├── smoke.cjs (+ smoke.scenario.js)   纯 Node 冒烟测试
-│   ├── memory-generation.cjs             记忆生成回归测试
-│   └── demo.jsdom.cjs                    jsdom 集成测试（需 npm i -D jsdom）
-└── docs/BAIBAI-BRIDGE.md            联动实现说明（补丁结构、接线点、重新打包）
-```
+- [v2.5完整使用与开发说明](docs/V2.5-GUIDE.md)
+- [五个仓库的阅读、许可证核对与整合取舍](docs/V2.5-REPOSITORY-REVIEW.md)
+- [提交到GitHub及同步镜像](docs/REPOSITORY-UPDATE.md)
+- 历史版本：[v2.0](docs/README-2.0.md) / [v1.6.3](docs/README-1.6.3.md)
 
-## 从源码重建
+## 构建与测试
 
 ```bash
-python patch/apply_phone_patch.py base/tsukiyo-phone-1.5.2.js tsukiyo-phone-1.6.3.js
-node test/smoke.cjs                 # 期望 ALL_OK
+npm ci
+npm run verify
+# 构建只需Python 3，不访问网络
+python3 patch/build_v25.py
+# 在原卡内的1.6.3/2.0定制代码上升级，保留卡版本、剧情与预置
+python3 patch/build_v25.py --card /path/to/原卡.json --outdir /path/to/output
 ```
 
-把产物写回 JSON（更新导入版 / 角色卡）：
+依赖安装需要网络；建议 Node 20+。无需CDN或额外服务器。
 
-```bash
-python patch/build_json.py tsukiyo-phone-1.6.3.js 输出目录 --card 臭小鬼_月夜来信_V3.5_已修复.json --standalone 月夜来信小手机_酒馆助手导入版_v1.5.2.json
-```
+当前源码：`src/studio/`、`src/avs/`；构建器：`patch/build_v25.py`；当前bundle：`tsukiyo-phone-2.5.0.js`；当前导入件：`releases/`。旧bundle、`dist/`与旧构建器仅保留作历史追溯。
 
-换基线重跑补丁时，报哪个锚点没命中就只需修那一处（锚点都是函数签名级别的稳定文本）。
+手机功能主维护仓库：`ansdojaods/tsukiyo-phone`。柏宝书仓库的 `phone/` 同步镜像；柏宝书主扩展仍为1.3.4，不改摘要核心。
 
-## 与百宝月夜书仓库的关系
+本次为本地源码交付，**没有推送GitHub**。通过模拟回归和桌面/窄屏浏览器检查，不代表用户真实酒馆、供应商API或移动端实机已经验收。五个参考项目不是新增运行依赖；具体许可差异见阅读报告。
 
-- 本仓库是百宝月夜书扩展仓库内 `phone/` 目录的独立镜像，内容一致，便于单独跟踪小手机的版本与改动；
-- 扩展侧（摘要引擎 / 渠道测话 / 联动设置页）见 https://github.com/ansdojaods/ST-BaiBai-Book-Tsukiyo 。
+## 相关仓库
 
-## 隐私与安全
-
-- 脚本不内置、不携带、不上传任何 API 密钥；密钥只保存在你自己的浏览器存储里（导出 JSON 前请自行确认）；
-- 不含聊天存档；历史数据在消息变量与本地存档里，导出分享脚本不会带走它们。
-
-## 制作与归属
-
-- 小手机本体为**月夜来信**原创脚本；
-- 1.6.x 百宝月夜书联动模块由本仓库的补丁链（锚点式文本补丁）加入，逻辑与文案修改均可见于 `patch/` 下的补丁源。
+- 百宝月夜书扩展（联动宿主）：https://github.com/ansdojaods/ST-BaiBai-Book-Tsukiyo

@@ -1,0 +1,5 @@
+CARD_PRESERVATION_OK: only phone code/name/info and phone metadata changed
+customized scripts: 1 contacts: 96 places: 59 openings: 14
+worldbook entries: 185
+embedded preset identical; character title/version, greetings, worldbook, other scripts, regex unchanged
+CARD_ENGINE_OK: all 14 openings; 96/96 contacts available; AVS defaults OFF
