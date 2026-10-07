@@ -709,9 +709,7 @@
           remove(d, ids) {
             const toRemove = d.memories.filter((m) => ids.has(m.id));
             for (const m of toRemove) {
-              if (d.memoryBook?.linked && m.wb && !d.memoryBook.pendingDelete.includes(m.id) && d.memoryBook.pendingDelete.length < 500) {
-                d.memoryBook.pendingDelete.push(m.id);
-              }
+              safetyQueueMemoryDelete(d, m);
             }
             d.memories = d.memories.filter((m) => !ids.has(m.id));
             return toRemove.length;
@@ -720,13 +718,10 @@
             const n = d.memories.length;
             if (d.memoryBook?.linked) {
               for (const m of d.memories) {
-                if (m.wb && !d.memoryBook.pendingDelete.includes(m.id) && d.memoryBook.pendingDelete.length < 500) {
-                  d.memoryBook.pendingDelete.push(m.id);
-                }
+                safetyQueueMemoryDelete(d, m);
               }
             }
             d.memories = [];
-            d.summaries = [];
             return n;
           }
         };

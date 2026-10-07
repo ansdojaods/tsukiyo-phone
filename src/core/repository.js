@@ -224,6 +224,7 @@
       if (guard) assert(guard(base, snap), "相关记录已有新变化，旧结果没有写入");
       const next = clone(base), result = fn(next, snap);
       assert(!result || typeof result.then !== "function", "保存函数不可包含异步操作");
+      recycleCapture(base, next);
       next.revision = Math.max(base.revision, this.revisionHigh || 0) + 1;
       validatePhone(next);
       const oldCheckpoints = oldTarget?.schema === 1 && Array.isArray(oldTarget.checkpoints) ? oldTarget.checkpoints : [];

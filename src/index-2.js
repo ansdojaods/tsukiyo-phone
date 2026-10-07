@@ -72,6 +72,8 @@
     const host = rootWindow(source), key = mode === "demo" ? "__TSUKIYO_PHONE_DEMO__" : "__TSUKIYO_PHONE__";
     if (host[key] && !host[key].disposed) {
       const current = host[key];
+      current.loadedVersions = [...new Set([...(current.loadedVersions || [current.version]), VERSION])];
+      if (current.version !== VERSION) current.ui.notify("检测到不同手机版本同时加载，请停用旧脚本并刷新后再使用新功能", "error");
       if (mode === "extension") {
         current.native = true;
         current.engine.bridge.registerSource(source);
@@ -80,7 +82,7 @@
       return current;
     }
     const bridge = mode === "demo" ? new DemoBridge(host) : new TavernBridge(host, source), engine = new PhoneEngine(bridge), ui = new PhoneUI(engine, { demo: mode === "demo" });
-    const app = { version: VERSION, engine, ui, native: mode === "extension", disposed: false, home: mode === "card" ? source : null, standby: /* @__PURE__ */ new Set(), cardSources: /* @__PURE__ */ new Set(), hideListeners: /* @__PURE__ */ new Map(), open: (view, id2) => ui.open(view, id2), close: () => ui.close(), dispose() {
+    const app = { version: VERSION, loadedVersions: [VERSION], engine, ui, native: mode === "extension", disposed: false, home: mode === "card" ? source : null, standby: /* @__PURE__ */ new Set(), cardSources: /* @__PURE__ */ new Set(), hideListeners: /* @__PURE__ */ new Map(), open: (view, id2) => ui.open(view, id2), close: () => ui.close(), dispose() {
       if (app.disposed) return;
       app.disposed = true;
       for (const off of app.hideListeners.values()) off();

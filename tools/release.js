@@ -18,7 +18,7 @@ const path = require("path");
 const crypto = require("crypto");
 
 const root = path.join(__dirname, "..");
-const pkg = { version: "2.9.3", name: "tsukiyo-phone" };
+const pkg = { version: "2.9.4", name: "tsukiyo-phone" };
 const manifestPath = path.join(root, "src", "manifest.json");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 const sha = (s) => crypto.createHash("sha256").update(s, "utf8").digest("hex");
@@ -63,12 +63,12 @@ if (fs.existsSync(presetFile)) {
 // ---- 3. 酒馆助手导入版 JSON（content = 独立版全文） ----
 // Stable metadata: clean builds do not depend on a previous dist file.
 const meta = { type: "script", enabled: true, id: "5ac630d9-b12e-53ec-bfd1-c7069b1337e5", button: { enabled: false, buttons: [] }, data: {}, export_with: { data: true, button: true } };
-const newInfo = "v2.9.3：修复灵魂档案路由；角色批量删除与迟到结果保护；工坊分类型条目预览、批量移除和恢复；选择已有世界书、勾选记忆条目后连接；首次同步来源修正与跨聊天保护。升级前备份，停用旧脚本。";
+const newInfo = "v2.9.4：新增工坊同步变更预览与逐项执行、逐条冲突处理、本地回收站及备份导入导出、记忆导入范围管理、脱敏升级自检。回收站满时阻止新删除，不静默清理；恢复默认不写出。先备份，停用旧脚本。";
 const payload = {
   ...meta,
   type: "script",
   enabled: true,
-  name: "月夜来信 · 小手机 v" + pkg.version + "（档案修复 · 条目预览与批量管理 · 已有世界书同步）",
+  name: "月夜来信 · 小手机 v" + pkg.version + "（同步预览 · 冲突处理 · 回收站 · 升级自检）",
   content: out,
   info: newInfo,
 };

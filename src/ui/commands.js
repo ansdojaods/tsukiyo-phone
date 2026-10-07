@@ -559,6 +559,8 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
   }
   async function handleAction(ui, action, value, target) {
     const engine = ui.engine;
+    if (value === "memories" && ["batch-delete-modal", "clear-module"].includes(action)) return reviewAction(ui, "review-memory-manage", action === "clear-module" ? "all" : "");
+    if (action.startsWith("safe-") || action === "book-sync") return safetyAction(ui, action === "book-sync" ? "safe-sync" : action, value);
     if (action.startsWith("review-") || action === "soul-char-del") return reviewAction(ui, action, value);
     if (action.startsWith("center-")) return centerAction(ui, action, value);
     if (action.startsWith("st-")) return studioAction(ui, action, value);

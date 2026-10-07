@@ -20,6 +20,7 @@
     return { uid: raw.uid ?? raw.id, name: String(raw.name ?? raw.comment ?? ""), content: String(raw.content ?? ""), keys: cleanKeys(keys), enabled: raw.enabled !== false, tid: String(raw.extra?.[MEMORY_TAG]?.id || ""), foreign: String(raw.extra?.[MEMORY_TAG]?.source || "") === "book-studio" };
   }
   function planMemorySync(memories, rawEntries, { removed = [], allowedImportUids = null, newId = () => "memory-" + Math.random().toString(36).slice(2, 10) } = {}) {
+    memories = memories.filter(m => m.localOnly !== true);
     const entries = rawEntries.map(normalizeEntry).filter((e2) => e2.uid !== void 0 && !e2.foreign);
     const byUid = new Map(entries.map((e2) => [e2.uid, e2]));
     const byTid = /* @__PURE__ */ new Map();

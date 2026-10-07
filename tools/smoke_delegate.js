@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * v2.9.3 冒烟测试：楼层记忆归属互斥（检测到百宝月夜书「剧情剪辑台」时手机不重复生成 / 不重复注入）。
+ * v2.9.4 冒烟测试：楼层记忆归属互斥（检测到百宝月夜书「剧情剪辑台」时手机不重复生成 / 不重复注入）。
  *
- *   node tools/smoke_delegate.js [dist/tsukiyo-phone-v2.9.3.js]
+ *   node tools/smoke_delegate.js [dist/tsukiyo-phone-v2.9.4.js]
  */
 const fs = require("fs");
 const path = require("path");
 
-const FILE = process.argv[2] || path.join(__dirname, "..", "dist", "tsukiyo-phone-v2.9.3.js");
+const FILE = process.argv[2] || path.join(__dirname, "..", "dist", "tsukiyo-phone-v2.9.4.js");
 const src = fs.readFileSync(FILE, "utf8");
 let code = src.replace(/TsukiyoPhoneBundle\.start\([^)]*\);?\s*$/, "");
 code = code.replace(
@@ -80,7 +80,7 @@ function makeEngine({ editor = true } = {}) {
   return { engine, data };
 }
 
-console.log("\n[13] v2.9.3 楼层记忆归属互斥（归属探测 / 拦截 / 只留手机内记忆 / 镜像）");
+console.log("\n[13] v2.9.4 楼层记忆归属互斥（归属探测 / 拦截 / 只留手机内记忆 / 镜像）");
 
 const v1 = msFresh();
 ok(v1.delegate && v1.delegate.enabled === true && v1.delegate.keepPhoneRecall === false, "默认：开关打开、不重复注入手机内记忆");
@@ -160,8 +160,8 @@ ok(msB.delegated() === false && backThrew === 0, "关掉开关即改回手机自
 /* ⑥ 静态检查 */
 const patched = src;
 ok(
-  /version: "2\.9\.3"/.test(patched) && /小手机 v2\.9\.3/.test(patched),
-  "版本号与头部注释 2.9.3",
+  /version: "2\.9\.4"/.test(patched) && /小手机 v2\.9\.4/.test(patched),
+  "版本号与头部注释 2.9.4",
 );
 ok(
   /delegate: \{ enabled: true, keepPhoneRecall: false/.test(patched) && /this\.assertOwner\(/.test(patched) && /msDelegateCard/.test(patched) && /keepPhoneRecall: false, engine: ""/.test(patched),

@@ -282,6 +282,7 @@
           const handledRemoved = new Set(cfg.pendingDelete.map((r) => r.id));
           const opts = () => ({ removed: cfg.pendingDelete, allowedImportUids: cfg.selectionBook === book ? cfg.importUids : null, newId: () => id("memory") });
           let plan = planMemorySync(data.memories.filter(notBaibai), entries, opts());
+          safetyMemoryPreflight(data, plan, acceptMassDelete);
           const needsWrite = plan.create.length || plan.update.length || plan.stamp.length || plan.deleteWB.length || plan.import.some((e2) => !e2.tid);
           let finalEntries = entries;
           if (needsWrite) {
@@ -289,6 +290,7 @@
             finalEntries = await this.bridge.wbUpdate(book, (fresh) => {
               guard();
               plan = planMemorySync(data.memories.filter(notBaibai), fresh, opts());
+              safetyMemoryPreflight(data, plan, acceptMassDelete);
               return applyPlanToEntries(fresh, plan, byId);
             });
           }
@@ -352,7 +354,7 @@
     removeLinked(s, memoryId) {
       const m = s.memories.find((x) => x.id === memoryId);
       assert(m, "记忆不存在");
-      if (m.wb && s.memoryBook.linked) s.memoryBook.pendingDelete.push({ id: m.id, uid: m.wb.uid });
+      safetyQueueMemoryDelete(s, m);
       s.memories = s.memories.filter((x) => x.id !== memoryId);
     }
   };

@@ -1,4 +1,4 @@
-/* 月夜来信 · 小手机 v2.9.3（灵魂档案路由修复 · 批量删除 · 世界书条目预览与管理 · 已有世界书连接 · 同步与异步结果保护）原创实现；升级前备份。 */
+/* 月夜来信 · 小手机 v2.9.4（工坊同步预览 · 冲突处理 · 本地回收站 · 记忆导入范围管理 · 升级自检）升级前备份；自动同步不会逐次要求审批。 */
 var TSUKIYO_PRESET = /*@@PRESET@@*/null/*@@END@@*/;
 var TsukiyoPhoneBundle = (() => {
   var PRESET = typeof TSUKIYO_PRESET === "object" && TSUKIYO_PRESET && Array.isArray(TSUKIYO_PRESET.contacts) ? TSUKIYO_PRESET : null;
@@ -31,7 +31,7 @@ var TsukiyoPhoneBundle = (() => {
   });
 
   // package.json
-  var package_default = { name: "tsukiyo-phone", version: "2.9.3", description: "月夜来信 · 独立实现的酒馆拟真社交与生活手机（酒馆助手脚本）：记忆工作台（分层摘要 / 状态账本 / 本地召回 / 楼层收纳） · 楼层记忆归属互斥（交给百宝月夜书时不重复生成） · 百宝月夜书公开API联动 · 灵魂链接内置（不再依赖外部 SoulLink 扩展） · 世界书工坊 · 主动来信无限 · 可读导出" };
+  var package_default = { name: "tsukiyo-phone", version: "2.9.4", description: "月夜来信 · 独立实现的酒馆拟真社交与生活手机（酒馆助手脚本）：记忆工作台（分层摘要 / 状态账本 / 本地召回 / 楼层收纳） · 楼层记忆归属互斥（交给百宝月夜书时不重复生成） · 百宝月夜书公开API联动 · 灵魂链接内置（不再依赖外部 SoulLink 扩展） · 世界书工坊 · 主动来信无限 · 可读导出" };
 
   // src/core/utils.js
   var VERSION = package_default.version;
@@ -1324,9 +1324,7 @@ var TsukiyoPhoneBundle = (() => {
           remove(d, ids) {
             const toRemove = d.memories.filter((m) => ids.has(m.id));
             for (const m of toRemove) {
-              if (d.memoryBook?.linked && m.wb && !d.memoryBook.pendingDelete.includes(m.id) && d.memoryBook.pendingDelete.length < 500) {
-                d.memoryBook.pendingDelete.push(m.id);
-              }
+              safetyQueueMemoryDelete(d, m);
             }
             d.memories = d.memories.filter((m) => !ids.has(m.id));
             return toRemove.length;
@@ -1335,13 +1333,10 @@ var TsukiyoPhoneBundle = (() => {
             const n = d.memories.length;
             if (d.memoryBook?.linked) {
               for (const m of d.memories) {
-                if (m.wb && !d.memoryBook.pendingDelete.includes(m.id) && d.memoryBook.pendingDelete.length < 500) {
-                  d.memoryBook.pendingDelete.push(m.id);
-                }
+                safetyQueueMemoryDelete(d, m);
               }
             }
             d.memories = [];
-            d.summaries = [];
             return n;
           }
         };
@@ -2411,10 +2406,11 @@ ${from.bio.trim()}`;
   // src/core/model.js
   var freshMemoryBook = () => ({ name: "", scope: "card", linked: false, autoSync: true, bound: false, lastSyncAt: 0, lastError: "", pendingDelete: [] });
   function freshPhone() {
-    return { schema: 1, revision: 0, studio: studioFresh(), visual: avsFresh(), arc: freshArc(), canonicalSeeded: false, removedContacts: [], memoryBook: freshMemoryBook(), bookSync: bookFreshState(), soul: soulFresh(), ms: msFresh(), memApi: memApiFresh(), contacts: [], threads: [], feed: [], plans: [], activePlan: null, agenda: [], notes: [], diary: [], tasks: [], items: [], album: [], places: [], memories: [], summaries: [], legacyArchive: [], logs: [], migration: [], settings: { planningMode: "manual", inject: true, readNarrative: true, unlockAll: true, auto: { enabled: false, consentAt: 0, proactive: true, planning: true, social: false, memory: true, proactiveMinutes: 20, planningMinutes: 45, socialMinutes: 90, proactiveEvery: 3, socialEvery: 5, maxHourly: 6, maxDaily: 24, quietStart: 23, quietEnd: 7, proactiveUnlimited: true, proactiveIgnoreQuiet: true, proactiveUnreadCap: 3, proactiveCooldown: 6 } }, automation: { attempts: [], last: {}, lastReply: {}, failures: {}, next: {}, lastActor: "", lastNarrative: "", proactiveLog: [] }, manualStory: { date: "", time: "", place: "" } };
+    return { schema: 1, revision: 0, recycle: [], studio: studioFresh(), visual: avsFresh(), arc: freshArc(), canonicalSeeded: false, removedContacts: [], memoryBook: freshMemoryBook(), bookSync: bookFreshState(), soul: soulFresh(), ms: msFresh(), memApi: memApiFresh(), contacts: [], threads: [], feed: [], plans: [], activePlan: null, agenda: [], notes: [], diary: [], tasks: [], items: [], album: [], places: [], memories: [], summaries: [], legacyArchive: [], logs: [], migration: [], settings: { planningMode: "manual", inject: true, readNarrative: true, unlockAll: true, auto: { enabled: false, consentAt: 0, proactive: true, planning: true, social: false, memory: true, proactiveMinutes: 20, planningMinutes: 45, socialMinutes: 90, proactiveEvery: 3, socialEvery: 5, maxHourly: 6, maxDaily: 24, quietStart: 23, quietEnd: 7, proactiveUnlimited: true, proactiveIgnoreQuiet: true, proactiveUnreadCap: 3, proactiveCooldown: 6 } }, automation: { attempts: [], last: {}, lastReply: {}, failures: {}, next: {}, lastActor: "", lastNarrative: "", proactiveLog: [] }, manualStory: { date: "", time: "", place: "" } };
   }
   function validatePhone(data) {
     safeJson(data);
+    recycleValidate(data);
     assert(isObject(data) && data.schema === 1, "不是兼容的月夜来信存档");
     assert(Number.isSafeInteger(data.revision) && data.revision >= 0, "版本计数错误");
     const limits = { contacts: 200, threads: 120, feed: 500, plans: 100, agenda: 300, notes: 300, diary: 300, tasks: 300, items: 300, album: 60, places: 120, memories: 1e3, summaries: 500, legacyArchive: 20, logs: 200, migration: 50 };
@@ -2490,6 +2486,7 @@ ${from.bio.trim()}`;
       assert(p && Number.isInteger(data.activePlan.cursor) && data.activePlan.cursor >= 0 && data.activePlan.cursor < p.beats.length, "当前规划游标无效");
     }
     for (const m of data.memories) {
+      if (m.localOnly !== undefined) assert(typeof m.localOnly === "boolean", "本地恢复标记无效");
       assert(m.id && m.text && Array.isArray(m.audience) && Array.isArray(m.sources) && ["phone_fact", "narrative_fact", "promise", "manual"].includes(m.kind), "记忆结构错误");
       if (m.keys !== void 0) assert(Array.isArray(m.keys) && m.keys.length <= 12 && m.keys.every((k) => typeof k === "string" && k.length <= 80), "记忆关键词错误");
       if (m.wb !== void 0) assert(isObject(m.wb) && typeof m.wb.hash === "string", "记忆的世界书链接错误");
@@ -2513,6 +2510,7 @@ ${from.bio.trim()}`;
     safeJson(raw);
     assert(isObject(raw), "存档必须为对象");
     const s = { ...base, ...clone(raw), settings: { ...base.settings, ...raw.settings, auto: { ...base.settings.auto, ...raw.settings?.auto } }, automation: { ...base.automation, ...raw.automation, proactiveLog: Array.isArray(raw.automation?.proactiveLog) ? clone(raw.automation.proactiveLog).slice(-40) : [] }, manualStory: { ...base.manualStory, ...raw.manualStory }, memoryBook: { ...base.memoryBook, ...isObject(raw.memoryBook) ? raw.memoryBook : {} }, bookSync: { ...base.bookSync, ...isObject(raw.bookSync) ? raw.bookSync : {}, sources: { ...base.bookSync.sources, ...(isObject(raw.bookSync) && isObject(raw.bookSync.sources) ? raw.bookSync.sources : {}) } }, soul: { ...base.soul, ...(isObject(raw.soul) ? raw.soul : {}), cfg: { ...base.soul.cfg, ...(raw.soul?.cfg || {}) }, auto: { ...base.soul.auto, ...(raw.soul?.auto || {}) }, roleplay: { ...base.soul.roleplay, ...(raw.soul?.roleplay || {}) }, presets: { ...base.soul.presets, ...(raw.soul?.presets || {}) }, last: { ...base.soul.last, ...(raw.soul?.last || {}) }, stats: { ...base.soul.stats, ...(raw.soul?.stats || {}) }, roster: isObject(raw.soul?.roster) ? raw.soul.roster : {} }, ms: { ...base.ms, ...(isObject(raw.ms) ? raw.ms : {}), cfg: { ...base.ms.cfg, ...(raw.ms?.cfg || {}) }, auto: { ...base.ms.auto, ...(raw.ms?.auto || {}) }, inject: { ...base.ms.inject, ...(raw.ms?.inject || {}) }, shelve: { ...base.ms.shelve, ...(raw.ms?.shelve || {}) }, presets: { ...base.ms.presets, ...(raw.ms?.presets || {}) }, seen: { ...base.ms.seen, ...(raw.ms?.seen || {}) }, stats: { ...base.ms.stats, ...(raw.ms?.stats || {}) }, delegate: { ...base.ms.delegate, ...(raw.ms?.delegate || {}) } }, memApi: { ...base.memApi, ...(isObject(raw.memApi) ? raw.memApi : {}), pull: { ...base.memApi.pull, ...(raw.memApi?.pull || {}) }, stats: { ...base.memApi.stats, ...(raw.memApi?.stats || {}) } }, arc: normalizeArc(raw.arc), legacyArchive: [], migration: [] };
+    s.memoryBook.pendingDelete = s.memoryBook.pendingDelete.map(r => typeof r === "string" ? {id:r} : r);
     for (const c of s.contacts) {
       c.age = c.age == null ? null : Math.round(Number(c.age));
       if (c.age !== null && c.age < 12) c.reachable = false;
@@ -3089,6 +3087,7 @@ ${from.bio.trim()}`;
       if (guard) assert(guard(base, snap), "相关记录已有新变化，旧结果没有写入");
       const next = clone(base), result = fn(next, snap);
       assert(!result || typeof result.then !== "function", "保存函数不可包含异步操作");
+      recycleCapture(base, next);
       next.revision = Math.max(base.revision, this.revisionHigh || 0) + 1;
       validatePhone(next);
       const oldCheckpoints = oldTarget?.schema === 1 && Array.isArray(oldTarget.checkpoints) ? oldTarget.checkpoints : [];
@@ -3911,6 +3910,7 @@ ${from.bio.trim()}`;
     return { uid: raw.uid ?? raw.id, name: String(raw.name ?? raw.comment ?? ""), content: String(raw.content ?? ""), keys: cleanKeys(keys), enabled: raw.enabled !== false, tid: String(raw.extra?.[MEMORY_TAG]?.id || ""), foreign: String(raw.extra?.[MEMORY_TAG]?.source || "") === "book-studio" };
   }
   function planMemorySync(memories, rawEntries, { removed = [], allowedImportUids = null, newId = () => "memory-" + Math.random().toString(36).slice(2, 10) } = {}) {
+    memories = memories.filter(m => m.localOnly !== true);
     const entries = rawEntries.map(normalizeEntry).filter((e2) => e2.uid !== void 0 && !e2.foreign);
     const byUid = new Map(entries.map((e2) => [e2.uid, e2]));
     const byTid = /* @__PURE__ */ new Map();
@@ -5482,6 +5482,7 @@ ${from.bio.trim()}`;
           const handledRemoved = new Set(cfg.pendingDelete.map((r) => r.id));
           const opts = () => ({ removed: cfg.pendingDelete, allowedImportUids: cfg.selectionBook === book ? cfg.importUids : null, newId: () => id("memory") });
           let plan = planMemorySync(data.memories.filter(notBaibai), entries, opts());
+          safetyMemoryPreflight(data, plan, acceptMassDelete);
           const needsWrite = plan.create.length || plan.update.length || plan.stamp.length || plan.deleteWB.length || plan.import.some((e2) => !e2.tid);
           let finalEntries = entries;
           if (needsWrite) {
@@ -5489,6 +5490,7 @@ ${from.bio.trim()}`;
             finalEntries = await this.bridge.wbUpdate(book, (fresh) => {
               guard();
               plan = planMemorySync(data.memories.filter(notBaibai), fresh, opts());
+              safetyMemoryPreflight(data, plan, acceptMassDelete);
               return applyPlanToEntries(fresh, plan, byId);
             });
           }
@@ -5552,7 +5554,7 @@ ${from.bio.trim()}`;
     removeLinked(s, memoryId) {
       const m = s.memories.find((x) => x.id === memoryId);
       assert(m, "记忆不存在");
-      if (m.wb && s.memoryBook.linked) s.memoryBook.pendingDelete.push({ id: m.id, uid: m.wb.uid });
+      safetyQueueMemoryDelete(s, m);
       s.memories = s.memories.filter((x) => x.id !== memoryId);
     }
   };
@@ -6808,7 +6810,8 @@ ${from.bio.trim()}`;
       this.lastHash = "";
       return this.sync({ reason: "rebuild", force: true, acceptMassDelete: true });
     }
-    async sync({ reason = "auto", force = false, acceptMassDelete = false } = {}) {
+    async sync({ reason = "auto", force = false, acceptMassDelete = false, selection = null } = {}) {
+      if (selection) assert(!this.stopped && this.cfg?.linked && !this.running, "工坊连接或执行状态变化，请重新预览");
       if (this.stopped || !this.cfg?.linked) return null;
       if (this.running) {
         this.again = true;
@@ -6818,6 +6821,7 @@ ${from.bio.trim()}`;
         this.schedule(4e3);
         return null;
       }
+      if (selection) { reviewAssert(this.eng, selection.snap); assert(!this.running, "工坊正在同步，请重新预览"); }
       const runSnap = this.bridge.capture();
       this.running = true;
       this.publish({ phase: "syncing" });
@@ -6825,6 +6829,7 @@ ${from.bio.trim()}`;
         const cfg = this.cfg, book = cfg.name;
         const snap = this.bridge.capture(), data = this.eng.repo.data;
         const inputSig = fingerprint([data.bookSync, this.recordsFor(data, snap)]);
+        if (selection) assert(selection.book === book && selection.inputSig === inputSig, "手机数据或连接在预览后变化，请重新预览");
         const guard = () => { reviewAssert(this.eng, snap); assert(inputSig === fingerprint([this.eng.repo.data.bookSync, this.recordsFor(this.eng.repo.data, snap)]), "手机数据已变化，旧同步结果未提交"); return true; };
         const names3 = await this.bridge.wbNames();
         if (!names3.includes(book)) {
@@ -6834,6 +6839,7 @@ ${from.bio.trim()}`;
         }
         const entries = await this.bridge.wbRead(book);
         guard();
+        if (selection) assert(reviewBookSig(entries) === selection.remoteSig, "世界书在预览后变化，请重新预览");
         const mine = new Map();
         for (const e2 of entries) {
           const st = bookStampOf(e2);
@@ -6841,24 +6847,11 @@ ${from.bio.trim()}`;
         }
         const recs = this.recordsFor(data, snap);
         const byKey = new Map(recs.map((r) => [r.key, r]));
-        const plan = { create: [], update: [], pull: [], keep: 0, deleteWB: [], conflicts: 0 };
-        for (const r of recs) {
-          const hit = mine.get(r.key);
-          if (!hit) {
-            plan.create.push(r.key);
-            continue;
-          }
-          const base = String(hit.st.hash || ""), local = r.hash, remote = bookContentSig(bookEntryContent(hit.e));
-          const localBase = (cfg.syncBases || []).find(x => x.key === r.key)?.local || base;
-          if (local === localBase && remote === base) plan.keep++;
-          else if (local !== localBase && remote === base) plan.update.push(r.key);
-          else if (local === localBase && remote !== base) plan.pull.push(r.key);
-          else {
-            // Both sides changed: preserve both; do not silently overwrite either copy.
-            plan.conflicts++;
-          }
+        const plan = safetyPlan(recs, entries, cfg);
+        if (selection) {
+          const chosen = new Set(selection.keys);
+          for (const k of ["create", "update", "pull", "deleteWB"]) plan[k] = plan[k].filter(key => chosen.has(key));
         }
-        for (const [key] of mine) if (!byKey.has(key) && (cfg.managedKeys || []).includes(key)) plan.deleteWB.push(key);
         let guarded = "";
         if (plan.deleteWB.length >= 5 && plan.deleteWB.length > Math.max(2, Math.floor(mine.size * 0.5))) {
           if (!acceptMassDelete) {
@@ -6922,7 +6915,7 @@ ${from.bio.trim()}`;
           const localRows = this.recordsFor(s, snap), activeKeys = new Set(localRows.map(r => r.key));
           bs.syncBases = (bs.syncBases || []).filter(x => activeKeys.has(x.key) && !pulledKeys.has(x.key) && !updatedKeys.has(x.key));
           for (const r of localRows) if (pulledKeys.has(r.key)) bs.syncBases.push({key:r.key, local:r.hash});
-          bs.managedKeys = [...new Set([...byKey.keys(), ...(bs.managedKeys || [])])].filter(k => view.has(k) || byKey.has(k)).slice(0, 4000);
+          bs.managedKeys = [...new Set([...(selection ? [...plan.create, ...plan.update, ...plan.pull] : byKey.keys()), ...(bs.managedKeys || [])])].filter(k => view.has(k) || byKey.has(k)).slice(0, 4000);
           bs.lastSyncAt = Date.now();
           bs.stats = stats;
           bs.lastError = guarded === "held" ? "本地来源减少，已暂停大量删除远端工坊条目：请核对后确认清理" : plan.conflicts ? "手机与世界书同时修改：已保留双方，未自动覆盖。请预览核对后手动处理或备份后重建。" : "";
@@ -9999,6 +9992,8 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
   }
   async function handleAction(ui, action, value, target) {
     const engine = ui.engine;
+    if (value === "memories" && ["batch-delete-modal", "clear-module"].includes(action)) return reviewAction(ui, "review-memory-manage", action === "clear-module" ? "all" : "");
+    if (action.startsWith("safe-") || action === "book-sync") return safetyAction(ui, action === "book-sync" ? "safe-sync" : action, value);
     if (action.startsWith("review-") || action === "soul-char-del") return reviewAction(ui, action, value);
     if (action.startsWith("center-")) return centerAction(ui, action, value);
     if (action.startsWith("st-")) return studioAction(ui, action, value);
@@ -12264,15 +12259,15 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
     const mb = ui.engine.memoryBook, b = mb.info();
     if (!b.supported) return `<div class="card">${hint("记忆世界书需要酒馆助手（世界书接口）。当前环境没有检测到，记忆仍照常保存在手机里，并通过“正文注入”进入剧情。", true)}</div>`;
     if (!b.linked) return `<div class="card book-card"><h3>记忆世界书</h3><p class="tiny muted">可直接连接工坊已创建的世界书，无需再建一本；工坊档案与记忆分别管理，不重复导入。也可把手机记忆同步到一本单独的世界书（默认名「${e(ui.data.memoryBook.name || "角色卡名-小手机记忆")}」），可以在酒馆里直接查看、修改、增删，手机和世界书<b>双向同步</b>；世界书绑定到角色卡后，记忆就以世界书条目的方式进入正文。</p><div class="buttons">${button("读取已有世界书并同步", "review-memory-connect", "", "primary")}${button(icon("book", 14) + " 新建记忆世界书", "memory-book-create")}${button(icon("spark", 14) + " AI 生成一份记忆", "memory-book-generate")}</div></div>`;
-    return `<div class="card book-card"><div class="row-top"><h3>${e(b.name)}</h3><span>${tag(b.scope === "chat" ? "仅本聊天" : "整张角色卡共用", "gold")} ${tag(b.bound ? "已绑定" : "未绑定", b.bound ? "" : "rose")}</span></div><p class="tiny muted">已同步 ${b.linkedCount} / ${b.total} 条 · 上次 ${e(clock(b.lastSyncAt))}${b.phase === "syncing" ? " · 正在同步…" : ""}</p>${b.lastError ? hint(b.lastError, true) : ""}${b.confirm ? `<div class="hint warning">世界书里有 ${b.confirm.count} 条记忆被删除或整本被清空。要让手机也跟着删除，还是以手机记忆重建世界书？</div><div class="buttons">${button("手机也一起删除", "memory-book-accept-delete", "", "danger")}${button("以手机记忆重建世界书", "memory-book-rebuild", "", "primary")}</div>` : ""}<div class="buttons">${button(icon("shuffle", 14) + " 立即同步", "memory-book-sync", "", "primary")}${button(icon("spark", 14) + " AI 生成记忆", "memory-book-generate")}${b.bound ? "" : button("重新绑定", "memory-book-rebind")}${b.lastError && /不存在|删除了/.test(b.lastError) ? button("以手机记忆重建世界书", "memory-book-rebuild") : ""}${button("停止同步", "memory-book-unlink")}</div>${switchRow("自动同步", "手机改了就写进世界书；世界书改了就拉回手机", "memory-book-autosync", b.autoSync)}</div>`;
+    return `<div class="card book-card"><div class="row-top"><h3>${e(b.name)}</h3><span>${tag(b.scope === "chat" ? "仅本聊天" : "整张角色卡共用", "gold")} ${tag(b.bound ? "已绑定" : "未绑定", b.bound ? "" : "rose")}</span></div><p class="tiny muted">已同步 ${b.linkedCount} / ${b.total} 条 · 上次 ${e(clock(b.lastSyncAt))}${b.phase === "syncing" ? " · 正在同步…" : ""}</p>${b.lastError ? hint(b.lastError, true) : ""}${b.confirm ? `<div class="hint warning">世界书里有 ${b.confirm.count} 条记忆被删除或整本被清空。要让手机也跟着删除，还是以手机记忆重建世界书？</div><div class="buttons">${button("手机也一起删除", "memory-book-accept-delete", "", "danger")}${button("以手机记忆重建世界书", "memory-book-rebuild", "", "primary")}</div>` : ""}<div class="buttons">${button(icon("shuffle", 14) + " 立即同步", "memory-book-sync", "", "primary")}${button(icon("spark", 14) + " AI 生成记忆", "memory-book-generate")}${b.bound ? "" : button("重新绑定", "memory-book-rebind")}${b.lastError && /不存在|删除了/.test(b.lastError) ? button("以手机记忆重建世界书", "memory-book-rebuild") : ""}${button("管理导入范围", "safe-import-scope")}${button("停止同步", "memory-book-unlink")}</div>${switchRow("自动同步", "手机改了就写进世界书；世界书改了就拉回手机", "memory-book-autosync", b.autoSync)}</div>`;
   }
   function memoryCard(ui, m) {
     const s = ui.data, viaBook = s.memoryBook?.linked && m.wb;
-    return `<div class="card memory-card ${m.enabled === false ? "is-off" : ""}"><div class="row-top"><div>${tag(KIND_LABEL[m.kind] || "记忆")}${m.resolved ? tag("已核对结束") : ""}${viaBook ? tag("世界书", "gold") : ""}${m.bb ? tag("柏宝书", "gold") : ""}${m.enabled === false ? tag("已停用", "rose") : ""}</div></div>${m.title ? `<h3 style="margin-top:8px">${e(memoryTitle(m))}</h3>` : ""}<p style="margin-top:8px">${e(m.text)}</p>${m.keys?.length ? `<p class="muted tiny" style="margin-top:6px">关键词：${e(m.keys.join("、"))}</p>` : ""}<p class="muted tiny" style="margin-top:9px">知情：${e(m.audience.map((id2) => contactName(s, id2)).join("、") || "待核对")}</p><details class="details" style="margin:9px 0 0;padding:8px"><summary>来源</summary><p>${e(m.sources.map((x) => x.quote || x.note || x.messageId || "手工确认").join("\n"))}</p></details>${m.prev ? `<div class="hint warning" style="margin-top:8px">两边同时改过，已采用世界书版本。手机里被覆盖的旧内容：「${e(m.prev.text.slice(0, 80))}」</div>` : ""}<div class="buttons">${button("编辑", "memory-edit", m.id)}${button(m.enabled === false ? "启用" : "停用", "memory-toggle", m.id)}${m.prev ? button("恢复旧内容", "memory-restore-prev", m.id) : ""}${m.kind === "promise" && !m.resolved ? button("约定结束", "resolve-memory", m.id) : ""}${button("删除", "memory-delete", m.id, "danger")}</div></div>`;
+    return `<div class="card memory-card ${m.enabled === false ? "is-off" : ""}"><div class="row-top"><div>${tag(KIND_LABEL[m.kind] || "记忆")}${m.resolved ? tag("已核对结束") : ""}${viaBook ? tag("世界书", "gold") : ""}${m.bb ? tag("柏宝书", "gold") : ""}${m.enabled === false ? tag("已停用", "rose") : ""}</div></div>${m.title ? `<h3 style="margin-top:8px">${e(memoryTitle(m))}</h3>` : ""}<p style="margin-top:8px">${e(m.text)}</p>${m.keys?.length ? `<p class="muted tiny" style="margin-top:6px">关键词：${e(m.keys.join("、"))}</p>` : ""}<p class="muted tiny" style="margin-top:9px">知情：${e(m.audience.map((id2) => contactName(s, id2)).join("、") || "待核对")}</p><details class="details" style="margin:9px 0 0;padding:8px"><summary>来源</summary><p>${e(m.sources.map((x) => x.quote || x.note || x.messageId || "手工确认").join("\n"))}</p></details>${m.prev ? `<div class="hint warning" style="margin-top:8px">两边同时改过，已采用世界书版本。手机里被覆盖的旧内容：「${e(m.prev.text.slice(0, 80))}」</div>` : ""}<div class="buttons">${m.localOnly ? tag("本地恢复副本，未写出", "gold") + button("允许写入世界书", "safe-memory-publish", m.id) : ""}${button("编辑", "memory-edit", m.id)}${button(m.enabled === false ? "启用" : "停用", "memory-toggle", m.id)}${m.prev ? button("恢复旧内容", "memory-restore-prev", m.id) : ""}${m.kind === "promise" && !m.resolved ? button("约定结束", "resolve-memory", m.id) : ""}${button("删除", "memory-delete", m.id, "danger")}</div></div>`;
   }
   function memoryView(ui) {
     const s = ui.data;
-    return `<div class="pad"><div class="mini-stat">${icon("memory", 28)}<strong>${s.memories.length}</strong><span>条有范围的记忆<br>${s.summaries.length} 份会话摘要</span></div>${bookCard(ui)}${baibaiMemoryCard()}${msCard(ui)}${memApiCard(ui)}${memApiPreviewCard(ui)}${hint("原文、来源、知情者分别保留。邀请不是已经发生的行动；私人经历不会自动广播给其他角色。")}<div class="buttons">${button("整理新的交流", "summarize", "", "primary")}${button("查看正文注入", "inspect-injection")}${button(icon("plus", 14) + " 新增记忆", "new-memory")}${button("条目预览 / 批量删除", "review-memory-manage")}</div>${s.memories.length ? tpDeleteBar("memories", s.memories.length, "记忆") : ""}${section("明确记录的事", s.memories.length ? [...s.memories].reverse().map((m) => memoryCard(ui, m)).join("") : empty("还没有需要特别记下的事", "可以手动新增，或点“AI 生成记忆”从正文里提炼；摘要只是长线辅助。", "book"))}${s.summaries.length ? section("滚动摘要", s.summaries.slice(-8).reverse().map((m) => `<details class="details"><summary>${e(s.threads.find((t) => t.id === m.threadId)?.title || "旧会话")} · 摘要</summary><p>${e(m.text)}</p></details>`).join("")) : ""}</div>`;
+    return `<div class="pad"><div class="mini-stat">${icon("memory", 28)}<strong>${s.memories.length}</strong><span>条有范围的记忆<br>${s.summaries.length} 份会话摘要</span></div>${bookCard(ui)}${baibaiMemoryCard()}${msCard(ui)}${memApiCard(ui)}${memApiPreviewCard(ui)}${hint("原文、来源、知情者分别保留。邀请不是已经发生的行动；私人经历不会自动广播给其他角色。")}<div class="buttons">${button("整理新的交流", "summarize", "", "primary")}${button("查看正文注入", "inspect-injection")}${button(icon("plus", 14) + " 新增记忆", "new-memory")}${button("条目预览 / 批量删除", "review-memory-manage")}${button("回收站", "safe-recycle")}</div>${s.memories.length ? tpDeleteBar("memories", s.memories.length, "记忆") : ""}${section("明确记录的事", s.memories.length ? [...s.memories].reverse().map((m) => memoryCard(ui, m)).join("") : empty("还没有需要特别记下的事", "可以手动新增，或点“AI 生成记忆”从正文里提炼；摘要只是长线辅助。", "book"))}${s.summaries.length ? section("滚动摘要", s.summaries.slice(-8).reverse().map((m) => `<details class="details"><summary>${e(s.threads.find((t) => t.id === m.threadId)?.title || "旧会话")} · 摘要</summary><p>${e(m.text)}</p></details>`).join("")) : ""}</div>`;
   }
 
   // src/ui/views-memory-studio.js — v2.9 记忆工作台
@@ -12408,7 +12403,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
   // src/ui/views-settings.js
   function bookView(ui) {
     const studio = ui.engine.bookStudio, b = studio.info();
-    const manage = `<div class="card"><h3>条目管理</h3><div class="buttons">${button("预览条目 / 批量移除", "review-book-manage")}${button("恢复已排除条目", "review-book-restore")}${!b.linked ? button("读取已有世界书并同步", "review-book-connect") : ""}</div><p class="tiny muted">移除仅针对本工坊条目，保留手机原始数据；灵魂档案支持写出和作为模型参考，不直接回灌五节档案。</p></div>`;
+    const manage = `<div class="card"><h3>条目管理</h3><div class="buttons">${button("预览条目 / 批量移除", "review-book-manage")}${button("恢复已排除条目", "review-book-restore")}${b.linked ? button("同步变更预览", "safe-sync") + button("处理同步冲突", "safe-conflicts") : ""}${!b.linked ? button("读取已有世界书并同步", "review-book-connect") : ""}</div><p class="tiny muted">移除仅针对本工坊条目，保留手机原始数据；灵魂档案支持写出和作为模型参考，不直接回灌五节档案。</p></div>`;
     if (!b.supported) return `<div class="pad">${manage}${hint("世界书工坊需要酒馆助手的世界书接口（getWorldbook / createWorldbook / updateWorldbookWith）。当前环境没有检测到；手机数据仍照常保存在手机里。", true)}${section("可以做什么", `<p class="tiny muted">连接一本世界书后，手机里的日记、恋爱心迹、摘要、人物档案（NPC 性格与资料）、约定、备忘与清单都可以作为条目写进世界书：关键词由人物名与日期自动生成，条目可以在酒馆里直接改，改完手机也能取回。</p>`)}</div>`;
     if (!b.linked) {
       return `<div class="pad">${manage}<div class="card book-card"><h3>世界书工坊</h3><p class="tiny muted">把手机数据同步成一本独立世界书（默认「角色卡名-小手机世界书」）。与「记忆世界书」互不冲突：记忆条目仍由记忆模块负责，这里负责日记、心迹、摘要、人物档案、约定、备忘与清单。</p><div class="buttons">${button(icon("book", 14) + " 创建并同步", "book-create", "", "primary")}${button(icon("file", 14) + " 预览将要写入的条目", "book-preview")}</div></div>${section("当前可写入的内容", `<div class="card">${Object.entries(BOOK_SOURCES).map(([id2, label]) => `<p class="tiny muted" style="margin:4px 0">${e(label)} · <b>${b.counts?.[id2] || 0}</b> 条</p>`).join("")}<p class="form-note">写入是可选的：每类数据都能单独开关；人物档案默认只写回、不覆盖手机。</p></div>`)}</div>`;
@@ -12421,7 +12416,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
         ${st ? `<p class="tiny muted">上次结果：新增 ${st.created} · 更新 ${st.updated} · 取回 ${st.pulled} · 删除 ${st.deleted}${st.conflicts ? " · 冲突 " + st.conflicts : ""}${st.skipped ? " · 跳过 " + st.skipped : ""}</p>` : ""}
         ${b.lastError ? hint(b.lastError, true) : ""}
         ${b.confirm ? `<div class="hint warning">有 ${b.confirm.count} 条工坊记录的手机来源已移除、关闭或超出同步范围。是否删除这些远端工坊条目？手机原始记录不会被删除。</div><div class="buttons">${button("确认清理远端工坊条目", "book-accept-delete", "", "danger")}${button("以手机数据重建", "book-rebuild", "", "primary")}</div>` : ""}
-        <div class="buttons">${button(icon("shuffle", 14) + " 立即同步", "book-sync", "", "primary")}${button("重新绑定", "book-rebind")}${button("以手机重建", "book-rebuild")}<button type="button" class="btn" data-action="book-preview">导出条目预览</button>${button("停止同步", "book-unlink")}</div>
+        <div class="buttons">${button(icon("shuffle", 14) + " 预览并同步", "book-sync", "", "primary")}${button("重新绑定", "book-rebind")}${button("以手机重建", "book-rebuild")}<button type="button" class="btn" data-action="book-preview">导出条目预览</button>${button("停止同步", "book-unlink")}</div>
         ${switchRow("自动同步", "手机数据变了就写进世界书；世界书里改了会取回手机", "book-autosync", b.autoSync)}
       </div>
       ${section("要写进世界书的数据", `<div class="card">${rows}</div>`)}
@@ -12447,11 +12442,11 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
     const history = [...(v.history || [])].reverse().slice(0, 5);
     const logs = [...(v.log || [])].reverse().slice(0, 10);
     const head = `<div class="card"><h3 style="margin:0 0 6px">灵魂链接</h3><p class="tiny muted">档案按「聊天」保存在手机存档里（随备份一起走）。每个人各自独立调用一次模型，最多并发 ${v.cfg.concurrency} 个、单个 ${Math.round(v.cfg.timeoutMs / 1000)} 秒超时；每次只把最近 ${v.cfg.contextMessages} 条正文和 ta 自己的档案发给模型。</p>${switchRow("启用灵魂链接", "关闭后不调用、不注入，档案仍保留在存档里", "soul-toggle", v.enabled)}${info.enabled ? `<div class="buttons">${button("更新全部档案", "soul-analyze-all", "", "primary")}${button("推演本轮角色", "soul-roleplay")}${button("清除推演注入", "soul-roleplay-clear")}${button("从通讯录登记角色", "soul-import-contacts")}</div><div class="buttons">${button(icon("download", 14) + " 导出名单", "soul-export")}${button(icon("upload", 14) + " 导入名单", "soul-import")}</div><p class="form-note">导出为通用名单 JSON（app / kind / roster，字段与旧版 SoulLink 名单一致），方便你从以前的文件迁入；导入同样兼容 roster / archives / characters 结构。</p>` : ""}</div>`;
-    if (!info.enabled) return `<div class="pad">${head}${button("预览 / 批量删除已有档案", "review-soul-delete")}${hint("启用后可生成档案；查看和删除已有档案不需要启用模型。")}</div>`;
+    if (!info.enabled) return `<div class="pad">${head}${button("预览 / 批量删除已有档案", "review-soul-delete")}${button("回收站", "safe-recycle")}${hint("启用后可生成档案；查看和删除已有档案不需要启用模型。")}</div>`;
     const cfgCard = `<form data-form="soul"><div class="card"><h3 style="margin:0 0 6px">调用与推演参数</h3><div class="two-cols">${field("并发上限 1—8", "concurrency", v.cfg.concurrency, { type: "number" })}${field("单个请求超时（秒）5—180", "timeoutSec", Math.round(v.cfg.timeoutMs / 1000), { type: "number" })}${field("上下文条数 1—20", "contextMessages", v.cfg.contextMessages, { type: "number" })}${field("独白字数上限 80—800", "maxChars", v.cfg.maxChars, { type: "number" })}${field("注入深度 0—10", "injectDepth", v.cfg.injectDepth, { type: "number" })}${field("每节条目上限 10—60", "maxEntriesPerSection", v.cfg.maxEntriesPerSection, { type: "number" })}</div><p class="form-note">“注入深度”= 距离最新一条消息的层数：4 表示插在最后 4 条消息附近，越小越靠后（越容易被模型当成最近上下文）。</p><button type="submit" class="btn primary wide">保存参数</button></div></form>`;
     const autoCard = `<div class="card"><h3 style="margin:0 0 6px">自动维护与推演</h3>${switchRow("自动更新档案", "每次主线新回复结束后，先做预筛，再只更新有变化的角色；计入后台调用预算", "soul-auto-toggle", !!v.auto.enabled)}${switchRow("发送前角色推演", "为在场 / 最近出现的角色并发生成内心独白，注入正文提示（生成结束后自动清除）", "soul-roleplay-toggle", !!v.roleplay.enabled)}<div class="buttons">${button("推演方式：" + ({ off: "关闭", manual: "手动", barrier: "拦截发送按钮" }[v.roleplay?.mode || "manual"]), "soul-mode")}${button("预筛方式：" + (v.auto?.gateMode === "ai" ? "模型预筛" : "本地关键词"), "soul-gate-mode")}</div><p class="form-note">推演方式选「拦截发送按钮」时，点酒馆发送会先等推演完成再放行（最多 ${Math.round(v.cfg.timeoutMs / 1000)} 秒，失败就照常发送）；手机内给角色发消息时也会自动推演。不想被打断就用默认的「手动」。</p></div>`;
     const presetCard = `<div class="card"><h3 style="margin:0 0 6px">提示词预设</h3>${SOUL_PROMPT_KEYS.map((k) => `<div class="buttons" style="align-items:center">${button(SOUL_PROMPT_LABELS[k] + "：" + e(text(v.presets?.[k] || SOUL_DEFAULT_PROMPTS[k], 24)) + "…", "soul-preset", k)}${v.presets?.[k] !== void 0 ? button("恢复默认", "soul-preset-reset", k) : ""}</div>`).join("")}<div class="buttons">${button("导出提示词", "soul-presets-export")}${button("导入提示词", "soul-presets-import")}</div><p class="form-note">四套提示词可以照自己的口味改；也可以把任意现成提示词粘进来，改完点保存即可。</p></div>`;
-    const listCard = `<div class="card"><h3 style="margin:0 0 6px">角色名单（${rows.length} 人 · ${info.entries} 条）</h3><div class="buttons">${button("手动添加角色", "soul-add-char", "", "primary")}${button("批量删除角色", "review-soul-delete", "", "danger")}${button("世界书联动 / 条目预览", "go", "book")}${button("从通讯录登记", "soul-import-contacts")}</div></div>` + (rows.length ? rows.map((r) => soulRow(ui, r)).join("") : empty("名单还是空的", "从通讯录一键登记，或手动添加角色，然后点「更新档案」让模型读正文开始积累。", "heart"));
+    const listCard = `<div class="card"><h3 style="margin:0 0 6px">角色名单（${rows.length} 人 · ${info.entries} 条）</h3><div class="buttons">${button("手动添加角色", "soul-add-char", "", "primary")}${button("批量删除角色", "review-soul-delete", "", "danger")}${button("回收站", "safe-recycle")}${button("世界书联动 / 条目预览", "go", "book")}${button("从通讯录登记", "soul-import-contacts")}</div></div>` + (rows.length ? rows.map((r) => soulRow(ui, r)).join("") : empty("名单还是空的", "从通讯录一键登记，或手动添加角色，然后点「更新档案」让模型读正文开始积累。", "heart"));
     const histCard = history.length || logs.length ? `<div class="card"><h3 style="margin:0 0 6px">最近推演与日志</h3>${history.map((h) => `<p class="tiny muted" style="margin:6px 0"><b>#${(h.floor ?? 0) + 1}楼</b> · ${e(autoAgo(h.ts))} · ${e((h.actors || []).map((a2) => a2.name).join("、") || "无")}${h.ok === false ? " · 注入未就绪" : ""}</p>${(h.actors || []).map((a2) => `<details class="details"><summary>${e(a2.name)} 的内心独白</summary><p>${e(a2.text)}</p></details>`).join("")}`).join("")}${logs.map((l) => `<p class="tiny muted" style="margin:4px 0">${e(autoAgo(l.ts))} · ${e(l.text)}</p>`).join("")}<div class="buttons">${button("清空日志", "soul-log-clear")}</div></div>` : "";
     return `<div class="pad">${head}${cfgCard}${autoCard}${listCard}${presetCard}${histCard}${hint("与「记忆模块 / 记忆世界书」的分工：灵魂链接管的是“这个角色本身是谁、记得什么”，记忆模块管的是“发生过的事、尚未了结的约定”。两者可以同时开，但同一段内容不要两边都注入。")}</div>`;
   }
@@ -12469,7 +12464,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
 
   function settingsView(ui) {
     const s = ui.data, c = ui.engine.settings.data, bridge = ui.engine.bridge, bb = ui.engine.baibai ? ui.engine.baibai.status() : null;
-    return `<div class="pad"><div class="card"><div style="display:flex;align-items:center;gap:12px"><span class="avatar sage">${icon("moon", 23)}</span><div><h3 style="margin:0">月夜来信</h3><small>TSUKIYO PHONE · ${VERSION}</small></div></div><div class="divider"></div><p class="tiny muted">${bridge.mode === "demo" ? "当前为离线演示。模拟消息不会写入真实酒馆。" : "手机与当前角色聊天相连；不把界面状态冒充主线事实。"}</p></div><div class="card">${settingLink("API方案与模块分配", "go", "settings", c.profiles.length + " 个方案" + (Object.keys(MODULES).filter((k) => !ui.engine.settings.isEnabled(k)).length ? " · " + Object.keys(MODULES).filter((k) => !ui.engine.settings.isEnabled(k)).length + " 个模块已关闭" : ""), "api")}${switchRow("正文下显示剧情规划条", "在最新一条角色回复下方显示当前面·线·点，可一键打开或推进；状态栏脚本也可读取 __TSUKIYO_PHONE__.plan()", "plan-strip", c.ui.planStrip !== false)}${settingLink("自定义提示词", "edit-prompt", "note", c.prompt?.enabled && c.prompt.text ? "已启用 · 每次请求最先发送" : "未启用")}${settingLink("后台、来信与剧情方向", "go", "bell", s?.settings.auto.enabled ? "已开启" : "未开启", "automation")}${settingLink("备份与恢复", "go", "download", "只操作本手机", "backup")}${settingLink("运行记录", "go", "file", "任务与失败可追踪", "logs")}${settingLink("存档与规划状态", "go", "memory", "三层存档 · 自动推进", "diag")}${settingLink("正文注入检查", "inspect-injection", "memory", bridge.injectionReady ? "接口已就绪" : "尚未确认")}</div><div class="card">${switchRow("夜间阅读", "只改变手机外观，不改变剧情时间", "theme", c.theme === "night")}${s ? switchRow("角色卡人物全部解锁", "月夜来信卡的全部联系人直接可用；关闭后按剧情逐个解锁", "unlock-all", s.settings.unlockAll) : ""}${s ? switchRow("正文记忆联动", "已发生的交流与知情范围写入隐藏参考", "inject", s.settings.inject) : ""}${s ? switchRow("读取可知情的正文", "在场角色/明确允许的联系人可参考近期正文；其他私聊不混入", "read-narrative", s.settings.readNarrative) : ""}</div><div class="card"><h3 style="margin:0 0 6px">柏宝书联动</h3><p class="tiny muted">${e(bb ? bb.text : "不可用")}</p>${switchRow("启用柏宝书联动", "检测到「百宝月夜书」(≥1.3.0) 时双向联动；关闭后手机完全独立运行", "baibai-enabled", !!bb?.prefs.enabled)}${switchRow("使用柏宝书记忆生成（实时读取）", "聊天、主动来信、朋友圈/评论、日记、备忘、清单、日历、规划与记忆整理可参考柏宝书；关闭后不再读取，也不使用带柏宝书标记的导入记忆。公开动态/群聊只取有限本人资料，不公开全局私密摘要", "baibai-brief", !!bb?.prefs.brief)}${switchRow("在场人物兜底", "主线变量没有“当前互动NPC”时，采用柏宝书推断的在场人物", "baibai-present", !!bb?.prefs.present)}${switchRow("手机交流回写柏宝书", "新消息、约定、动态、未完约定推送到柏宝书的【小手机】外部记录，参与其正文注入与摘要；不会改动柏宝书自身的记忆", "baibai-push", !!bb?.prefs.push)}<div class="buttons">${button("立即回写", "baibai-push-now")}${button("导入柏宝书记忆", "baibai-import-memory")}${button("导入柏宝书 API 方案", "baibai-import-api")}${button("经柏宝书测活渠道", "baibai-test")}</div><p class="form-note">只读取柏宝书公开的 window.STBaiBaiBook.phone 接口；柏宝书密钥不经过手机（“导入方案”除外，它会复制一份密钥到本机）。</p></div>${soulCard(ui)}<p class="form-note">独立扩展与卡内脚本二选一即可；同页重复加载会复用实例。后台仅在酒馆页面仍开着时运行，标签页可能受浏览器节流。所有自动生成都计入你设置的调用预算。</p></div>`;
+    return `<div class="pad"><div class="card"><div style="display:flex;align-items:center;gap:12px"><span class="avatar sage">${icon("moon", 23)}</span><div><h3 style="margin:0">月夜来信</h3><small>TSUKIYO PHONE · ${VERSION}</small></div></div><div class="divider"></div><p class="tiny muted">${bridge.mode === "demo" ? "当前为离线演示。模拟消息不会写入真实酒馆。" : "手机与当前角色聊天相连；不把界面状态冒充主线事实。"}</p></div><div class="card">${settingLink("API方案与模块分配", "go", "settings", c.profiles.length + " 个方案" + (Object.keys(MODULES).filter((k) => !ui.engine.settings.isEnabled(k)).length ? " · " + Object.keys(MODULES).filter((k) => !ui.engine.settings.isEnabled(k)).length + " 个模块已关闭" : ""), "api")}${switchRow("正文下显示剧情规划条", "在最新一条角色回复下方显示当前面·线·点，可一键打开或推进；状态栏脚本也可读取 __TSUKIYO_PHONE__.plan()", "plan-strip", c.ui.planStrip !== false)}${settingLink("自定义提示词", "edit-prompt", "note", c.prompt?.enabled && c.prompt.text ? "已启用 · 每次请求最先发送" : "未启用")}${settingLink("后台、来信与剧情方向", "go", "bell", s?.settings.auto.enabled ? "已开启" : "未开启", "automation")}${settingLink("回收站（记忆 / 灵魂档案）", "safe-recycle", "trash", "仅当前聊天")}${settingLink("导入回收站备份", "safe-recycle-import", "download", "仅合入，不自动恢复")}${settingLink("升级与兼容性自检", "safe-diagnostics", "settings", "可导出脱敏报告")}${settingLink("备份与恢复", "go", "download", "只操作本手机", "backup")}${settingLink("运行记录", "go", "file", "任务与失败可追踪", "logs")}${settingLink("存档与规划状态", "go", "memory", "三层存档 · 自动推进", "diag")}${settingLink("正文注入检查", "inspect-injection", "memory", bridge.injectionReady ? "接口已就绪" : "尚未确认")}</div><div class="card">${switchRow("夜间阅读", "只改变手机外观，不改变剧情时间", "theme", c.theme === "night")}${s ? switchRow("角色卡人物全部解锁", "月夜来信卡的全部联系人直接可用；关闭后按剧情逐个解锁", "unlock-all", s.settings.unlockAll) : ""}${s ? switchRow("正文记忆联动", "已发生的交流与知情范围写入隐藏参考", "inject", s.settings.inject) : ""}${s ? switchRow("读取可知情的正文", "在场角色/明确允许的联系人可参考近期正文；其他私聊不混入", "read-narrative", s.settings.readNarrative) : ""}</div><div class="card"><h3 style="margin:0 0 6px">柏宝书联动</h3><p class="tiny muted">${e(bb ? bb.text : "不可用")}</p>${switchRow("启用柏宝书联动", "检测到「百宝月夜书」(≥1.3.0) 时双向联动；关闭后手机完全独立运行", "baibai-enabled", !!bb?.prefs.enabled)}${switchRow("使用柏宝书记忆生成（实时读取）", "聊天、主动来信、朋友圈/评论、日记、备忘、清单、日历、规划与记忆整理可参考柏宝书；关闭后不再读取，也不使用带柏宝书标记的导入记忆。公开动态/群聊只取有限本人资料，不公开全局私密摘要", "baibai-brief", !!bb?.prefs.brief)}${switchRow("在场人物兜底", "主线变量没有“当前互动NPC”时，采用柏宝书推断的在场人物", "baibai-present", !!bb?.prefs.present)}${switchRow("手机交流回写柏宝书", "新消息、约定、动态、未完约定推送到柏宝书的【小手机】外部记录，参与其正文注入与摘要；不会改动柏宝书自身的记忆", "baibai-push", !!bb?.prefs.push)}<div class="buttons">${button("立即回写", "baibai-push-now")}${button("导入柏宝书记忆", "baibai-import-memory")}${button("导入柏宝书 API 方案", "baibai-import-api")}${button("经柏宝书测活渠道", "baibai-test")}</div><p class="form-note">只读取柏宝书公开的 window.STBaiBaiBook.phone 接口；柏宝书密钥不经过手机（“导入方案”除外，它会复制一份密钥到本机）。</p></div>${soulCard(ui)}<p class="form-note">独立扩展与卡内脚本二选一即可；同页重复加载会复用实例。后台仅在酒馆页面仍开着时运行，标签页可能受浏览器节流。所有自动生成都计入你设置的调用预算。</p></div>`;
   }
   function apiView(ui) {
     const store = ui.engine.settings, c = store.data;
@@ -12594,7 +12589,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
       const rows = Object.values(soulData(ui.data).roster).filter(r => action !== "soul-char-del" || r.name === value).map(r => ({ key: r.name, name: r.name, content: soulRender(soulData(ui.data), r.name) }));
       const picked = await reviewPick(ui, "批量删除灵魂链接角色", rows, { submit: "删除选中档案", checked: action === "soul-char-del" ? [value] : [], note: "只删除手机灵魂档案及其推演历史，不删通讯录或记忆。若工坊启用灵魂档案同步，后续同步也会移除已纳入当前同步的对应工坊条目（大量移除需确认）。" });
       if (!picked?.length) return;
-      if (!await ui.confirm("确认删除 " + picked.length + " 位角色的灵魂档案？", "此操作不可单独撤销，建议先导出名单。", "删除")) return;
+      if (!await ui.confirm("确认删除 " + picked.length + " 位角色的灵魂档案？", "档案正文可从本聊天回收站恢复，推演历史不恢复；回收站满时会阻止删除。建议先导出名单。", "删除")) return;
       check();
       await eng.repo.mutate(s => { assert(fingerprint(soulData(s).roster) === before, "档案在预览后变化，请重新选择"); reviewSoulDelete(s, picked.map(r => r.key)); }, { snapshot: snap, label: "批量删除灵魂档案" });
       eng.soul.clearRoleplay(); eng.bookStudio.notePhoneChange(); ui.go("soul"); return;
@@ -12625,7 +12620,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
     if (action === "review-memory-manage") {
       const before = fingerprint([ui.data.memories, ui.data.memoryBook]);
       const rows = ui.data.memories.filter(notBaibai).map(m => ({key:m.id, name:memoryTitle(m), content:m.text, note:m.wb ? "已关联世界书" : "手机本地记忆"}));
-      const picked = await reviewPick(ui, "记忆条目预览 / 批量删除", rows, {submit:"删除所选记忆", note:"这里会删除手机记忆本身；已连接的对应记忆世界书条目将在同步时删除。工坊条目、柏宝书镜像和第三方书本体不在此列表。请先备份。"});
+      const picked = await reviewPick(ui, "记忆条目预览 / 批量删除", rows, {submit:"删除所选记忆", checked:value === "all" ? rows.map(r=>r.key) : [], note:"这里会删除手机记忆本身；已连接的对应记忆世界书条目将在同步时删除。工坊条目、柏宝书镜像和第三方书本体不在此列表。请先备份。"});
       if (!picked?.length || !await ui.confirm("确认删除 " + picked.length + " 条记忆？", "不同于工坊的排除写出，此操作会删除手机中的所选记忆；已关联的远端条目将在同步时删除。", "删除")) return;
       const guard = () => { check(); assert(before === fingerprint([eng.repo.data.memories, eng.repo.data.memoryBook]), "记忆或同步配置已变化，请重新选择"); return true; };
       await eng.repo.mutate(s => { for (const row of picked) eng.memoryBook.removeLinked(s, row.key); }, {snapshot:snap, guard, label:"预览后批量删除记忆"});
@@ -12641,11 +12636,224 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
       check(); if (!result) return;
       const remote = await eng.bridge.wbRead(result.name); check();
       const rows = remote.filter(r => !memory || !bookStampOf(r)).filter(r => (r.uid ?? r.id) !== undefined).map((r, i) => ({ key: String(i), uid: r.uid ?? r.id, name: r.name || r.comment || "未命名条目", content: r.content || "" }));
-      const selected = await reviewPick(ui, memory ? "选择要导入的记忆条目" : "现有世界书条目预览", rows, { submit: memory ? "连接并导入选中条目" : "确认连接", note: memory ? "只导入选中条目；其他条目保留原样，不删除；以后新增的未选条目也不会自动导入，如需增加请停止同步后重新选择。工坊条目不在本记忆列表中，可到工坊预览。手机已有记忆会同步写入此书。" : "这里只预览，勾选不会删除或导入第三方条目。连接后将按当前来源设置写出手机数据。" });
+      const selected = await reviewPick(ui, memory ? "选择要导入的记忆条目" : "现有世界书条目预览", rows, { submit: memory ? "连接并导入选中条目" : "确认连接", note: memory ? "只导入选中条目；其他条目保留原样，不删除；以后新增的未选条目也不会自动导入，可用“管理导入范围”追加勾选。工坊条目不在本记忆列表中，可到工坊预览。手机已有记忆会同步写入此书。" : "这里只预览，勾选不会删除或导入第三方条目。连接后将按当前来源设置写出手机数据。" });
       if (selected === null) return;
       check(); const fresh = await eng.bridge.wbRead(result.name); check(); assert(fingerprint(fresh) === fingerprint(remote), "世界书在预览后变化，请重新读取");
       await service.link({ name: result.name, scope: result.scope, acceptExisting: true, ...(memory ? { importUids: selected.map(r => r.uid) } : {}) });
       ui.notify("已连接已有世界书；未新建重复书。"); ui.render(); return;
+    }
+  }
+  // v2.9.4: reviewable writes, explicit conflict decisions, bounded local recovery.
+  function safetyPlan(records, entries, cfg) {
+    const mine = new Map(entries.filter(bookStampOf).map(e => [String(bookStampOf(e).key), {e,st:bookStampOf(e)}]));
+    const byKey = new Map(records.map(r => [r.key,r]));
+    const plan = {create:[],update:[],pull:[],deleteWB:[],conflictKeys:[],conflicts:0,keep:0};
+    for (const r of records) {
+      const hit=mine.get(r.key);
+      if (!hit) {plan.create.push(r.key);continue;}
+      const base=String(hit.st.hash || ""), localBase=(cfg.syncBases || []).find(x=>x.key===r.key)?.local || base;
+      const lc=r.hash!==localBase, rc=bookContentSig(bookEntryContent(hit.e))!==base;
+      if (!lc&&!rc) plan.keep++;
+      else if(lc&&!rc) plan.update.push(r.key);
+      else if(!lc&&rc) plan.pull.push(r.key);
+      else plan.conflictKeys.push(r.key);
+    }
+    for(const key of mine.keys()) if(!byKey.has(key)&&(cfg.managedKeys||[]).includes(key)) plan.deleteWB.push(key);
+    plan.conflicts=plan.conflictKeys.length;return plan;
+  }
+  function safetyInput(studio,snap,data=studio.eng.repo.data) {return fingerprint([data.bookSync,studio.recordsFor(data,snap)]);}
+  async function safetyPreview(studio) {
+    assert(studio.cfg?.linked && !studio.running,"请先连接工坊，等待当前同步结束");
+    const snap=studio.bridge.capture(), book=studio.cfg.name, inputSig=safetyInput(studio,snap);
+    const entries=await studio.bridge.wbRead(book);reviewAssert(studio.eng,snap);
+    assert(inputSig===safetyInput(studio,snap),"读取期间手机资料变化，请重新预览");
+    const records=studio.recordsFor(studio.eng.repo.data,snap);
+    return {snap,book,inputSig,remoteSig:reviewBookSig(entries),records,entries,plan:safetyPlan(records,entries,studio.cfg)};
+  }
+  function safetyPreviewRows(p,cfg) {
+    const rows=[];
+    for(const [kind,label] of [["create","新增至世界书"],["update","覆盖世界书"],["pull","取回手机"],["deleteWB","删除远端条目"],["conflictKeys","双方冲突：需单独处理"]]) {
+      for(const key of p.plan[kind]) {
+        const local=p.records.find(r=>r.key===key),remote=p.entries.find(e=>String(bookStampOf(e)?.key)===key);
+        const unsupported=kind==="pull"&&(cfg.pullBack===false||["soul","tasks"].includes(local?.src));
+        rows.push({key,name:(unsupported?"跳过：不支持回灌":label)+" · "+(local?.name||remote?.name||key),kind,unsupported,content:"【当前手机】\n"+(local?.content||"（无）")+"\n\n【当前世界书】\n"+(remote?.content||"（无）")+"\n\n【本次动作】\n"+(unsupported?"保持双方不变":label)});
+      }
+    }
+    return rows;
+  }
+  function recycleValidate(s) {
+    if(s.recycle===undefined)return;
+    assert(Array.isArray(s.recycle)&&s.recycle.length<=60,"回收站最多60条，请先导出或清理");
+    assert(JSON.stringify(s.recycle).length<=500000,"回收站容量已满，请先导出或清理");
+    const seen=new Set();
+    for(const r of s.recycle){assert(r&&typeof r.id==="string"&&!seen.has(r.id)&&["memory","soul","conflict"].includes(r.kind)&&isObject(r.payload)&&typeof r.name==="string"&&typeof r.book==="string"&&r.book.length<=200&&Number.isFinite(r.at),"回收站记录无效");seen.add(r.id);}
+  }
+  function recycleAdd(s,kind,name,payload,book="") {
+    const records=[...(s.recycle||[]),{id:id("recycle"),kind,name:String(name).slice(0,160),at:Date.now(),book,payload:clone(payload)}];
+    recycleValidate({recycle:records});s.recycle=records;
+  }
+  function recycleImport(s,raw) {
+    safeJson(raw);assert(raw?.app==="tsukiyo-phone"&&raw.kind==="recycle"&&Array.isArray(raw.records),"不是手机回收站备份");
+    recycleValidate({recycle:raw.records});
+    const records=clone(s.recycle||[]),known=new Set(records.map(r=>fingerprint([r.kind,r.name,r.book,r.payload])));
+    for(const r of raw.records){const sig=fingerprint([r.kind,r.name,r.book,r.payload]);if(known.has(sig))continue;records.push({...clone(r),id:id("recycle")});known.add(sig);}
+    recycleValidate({recycle:records});s.recycle=records;
+  }
+  function recycleCapture(before,after) {
+    const live=new Set(after.memories.map(m=>m.id));
+    for(const m of before.memories) if(!live.has(m.id)) recycleAdd(after,"memory",memoryTitle(m),m,before.memoryBook?.name||"");
+    const roster=after.soul?.roster||{};
+    for(const [name,row] of Object.entries(before.soul?.roster||{})) if(!Object.prototype.hasOwnProperty.call(roster,name)) recycleAdd(after,"soul",name,row,before.bookSync?.name||"");
+  }
+  function safetyQueueMemoryDelete(s,m) {
+    if(!m.wb || !s.memoryBook?.linked || m.localOnly)return;
+    const list=s.memoryBook.pendingDelete;
+    if(list.some(r=>(typeof r==="string"?r:r.id)===m.id))return;
+    assert(list.length<500,"记忆删除队列已满，请先完成同步");
+    list.push({id:m.id,uid:m.wb.uid});
+  }
+  function safetyMemoryPreflight(s,plan,acceptMassDelete) {
+    if(plan.guard&&!acceptMassDelete)return;
+    const gone=new Set(plan.deleteLocal);
+    if(gone.size)recycleCapture(s,{...s,recycle:clone(s.recycle||[]),memories:s.memories.filter(m=>!gone.has(m.id))});
+  }
+  function recycleRestore(s,selected) {
+    let restored=0;
+    for(const key of selected) {
+      const r=(s.recycle||[]).find(x=>x.id===key);assert(r,"回收站记录已变化");
+      assert(r.kind!=="conflict","冲突备份仅用于查看/导出，请在冲突面板手动合并");
+      if(r.kind==="memory") {
+        const m=clone(r.payload),oldId=m.id; m.id=id("memory");delete m.wb;delete m.bb;m.localOnly=true;
+        assert(s.memories.length<1000,"手机记忆已达上限");s.memories.push(m);
+        if(s.memoryBook.name===r.book)s.memoryBook.pendingDelete=s.memoryBook.pendingDelete.filter(x=>typeof x==="string"?x!==oldId:x.id!==oldId);
+      } else {
+        assert(!Object.prototype.hasOwnProperty.call(s.soul.roster,r.name),"同名档案已存在，不会覆盖："+r.name);
+        assert(!["__proto__","prototype","constructor"].includes(r.name),"不允许的角色名");
+        s.soul.roster[r.name]=clone(r.payload);
+        const key="soul:"+r.name;
+        s.bookSync.excludedKeys=[...new Set([...(s.bookSync.excludedKeys||[]),key])];
+        // A local-only restoration must not delete or overwrite an existing remote copy.
+        s.bookSync.managedKeys=(s.bookSync.managedKeys||[]).filter(k=>k!==key);
+      }
+      s.recycle=s.recycle.filter(x=>x.id!==key);restored++;
+    }
+    s.soul.stats.entries=Object.values(s.soul.roster).reduce((n,r)=>n+soulEntryCount(r),0);
+    return restored;
+  }
+  async function safetyResolve(studio,p,key,choice,merged="") {
+    assert(["local","remote","merge"].includes(choice),"请选择有效处理方式");
+    assert(!studio.running,"工坊正在同步");
+    const eng=studio.eng, r=p.records.find(x=>x.key===key),old=p.entries.find(x=>String(bookStampOf(x)?.key)===key);
+    assert(p.plan.conflictKeys.includes(key)&&r&&old,"冲突条目已变化");
+    if(choice!=="local")assert(!["soul","tasks"].includes(r.src),"该类型不支持结构化回灌，请手动整理后使用手机版本");
+    const content=choice==="merge"?String(merged).trim():String(old.content||"");
+    if(choice!=="local")assert(content&&content.length<=8000,"合并正文需为1至8000字");
+    const guard=()=>{reviewAssert(eng,p.snap);assert(studio.cfg.name===p.book&&p.inputSig===safetyInput(studio,p.snap),"手机或连接已变化，请重新预览");return true;};
+    studio.running=true;
+    try {
+      guard();const fresh=await studio.bridge.wbRead(p.book);guard();assert(reviewBookSig(fresh)===p.remoteSig,"世界书已变化，请重新预览");
+      // Back up both sides before any remote write. Capacity errors stop the operation here.
+      await eng.repo.mutate(s=>recycleAdd(s,"conflict",r.name,{local:r,remote:old},p.book),{snapshot:p.snap,guard,label:"冲突处理前备份"});
+      await studio.bridge.wbUpdate(p.book,entries=>{guard();assert(reviewBookSig(entries)===p.remoteSig,"世界书已被并行修改");return entries.map(raw=>{
+        if(String(bookStampOf(raw)?.key)!==key)return raw;
+        if(choice==="local")return stampBookEntry(raw,r);
+        return {...raw,content,extra:{...raw.extra,[MEMORY_TAG]:{...bookStampOf(raw),hash:bookContentSig(content)}}};
+      });});
+      await eng.repo.mutate(s=>{
+        if(choice!=="local")applyBookPulls(s,[{...r,content}],p.book,true);
+        s.bookSync.syncBases=(s.bookSync.syncBases||[]).filter(x=>x.key!==key);
+        if(choice!=="local")s.bookSync.syncBases.push({key,local:studio.recordsFor(s,p.snap).find(x=>x.key===key).hash});
+        s.bookSync.lastError="";
+      },{snapshot:p.snap,guard,label:"确认工坊冲突处理"});
+      studio.lastHash="";
+    } finally {studio.running=false;eng.emit();}
+  }
+  async function safetyImportScope(eng,p,selected) {
+    const mb=eng.memoryBook;
+    assert(!mb.running&&mb.cfg.linked,"请先连接记忆世界书，等待同步结束");
+    const guard=()=>{reviewAssert(eng,p.snap);assert(mb.cfg.name===p.book&&fingerprint([eng.repo.data.memoryBook,eng.repo.data.memories])===p.inputSig,"记忆或连接已变化，请重新打开");return true;};
+    guard();const fresh=await eng.bridge.wbRead(p.book);guard();assert(fingerprint(fresh)===p.remoteSig,"世界书条目已变化，请重新选择");
+    const valid=new Set(fresh.filter(r=>!bookStampOf(r)).map(r=>r.uid??r.id));assert(selected.every(u=>valid.has(u)),"选择包含无效条目");
+    // Saving scope never silently executes a synchronization or deletes existing bindings.
+    await eng.repo.mutate(s=>{s.memoryBook.selectionBook=p.book;s.memoryBook.importUids=[...new Set(selected)];},{snapshot:p.snap,guard,label:"管理记忆导入范围"});
+    if(mb.cfg.scope==="card")mb.remember(p.snap,{name:p.book,scope:"card",importUids:mb.cfg.importUids});
+  }
+  async function safetyDiagnostics(eng) {
+    const snap=eng.bridge.capture(),s=eng.repo.data;
+    const apis=["getWorldbook","createWorldbook","updateWorldbookWith","rebindCharWorldbooks","rebindChatWorldbook"];
+    const result={at:new Date().toISOString(),version:VERSION,schema:s.schema,validation:"ok",interfaces:Object.fromEntries(apis.map(k=>[k,typeof eng.bridge.api?.(k)==="function"])),books:{},contacts:{total:s.contacts.length},clock:storyFor(s,snap).origin,recycleCount:(s.recycle||[]).length};
+    try{validatePhone(clone(s));}catch{result.validation="failed";}
+    const expected=PRESET?PRESET.contacts.map(p=>p.id):snap.stat?.系统?.作品==="臭小鬼"?Object.keys(kusogaki_default.people).map(n=>"kg-"+fingerprint(n)):null;
+    if(expected){const removed=new Set((s.removedContacts||[]).map(x=>x.id));result.contacts.expected=expected.length;result.contacts.intentionallyRemoved=expected.filter(k=>removed.has(k)).length;result.contacts.missing=expected.filter(k=>!removed.has(k)&&!s.contacts.some(c=>c.id===k)).length;}
+    let names=null;try{names=await eng.bridge.wbNames();}catch{}
+    reviewAssert(eng,snap);
+    for(const [k,cfg] of [["workshop",s.bookSync],["memory",s.memoryBook]])result.books[k]={linked:cfg.linked,bound:cfg.bound,exists:cfg.linked?(names?names.includes(cfg.name):"unknown"):null,autoSync:cfg.autoSync};
+    const app=eng.win?.__TSUKIYO_PHONE__||eng.win?.__TSUKIYO_PHONE_DEMO__;
+    result.instance={activeVersion:app?.version||VERSION,loadedVersions:app?.loadedVersions||[VERSION],extensionAndCard:!!(app?.native&&app?.cardSources?.size),cardSources:app?.cardSources?.size||0};
+    return result;
+  }
+  async function safetyAction(ui,action,value) {
+    const eng=ui.engine,snap=eng.bridge.capture(),check=()=>reviewAssert(eng,snap);
+    if(action==="safe-sync"||action==="safe-conflicts") {
+      const p=await safetyPreview(eng.bookStudio);check();
+      const rows=safetyPreviewRows(p,eng.bookStudio.cfg);
+      if(action==="safe-conflicts") {
+        const conflicts=rows.filter(r=>r.kind==="conflictKeys");
+        if(!conflicts.length){ui.notify("没有待处理的工坊冲突");return;}
+        const picked=await reviewPick(ui,"选择一个冲突条目",conflicts,{submit:"处理所选",note:"每次处理一条；可使用手机、使用世界书、手动合并或取消跳过。双方原文先备份到回收站。"});
+        if(!picked?.length)return;assert(picked.length===1,"请一次选择一条冲突");
+        const key=picked[0].key,r=p.records.find(r=>r.key===key),supported=!["soul","tasks"].includes(r.src);
+        const decision=await ui.dialog("冲突处理",`<pre style="white-space:pre-wrap">${e(picked[0].content)}</pre>`+hint(r.src==="persona"?"世界书/合并内容保存为人物参考资料，不替换人物原始简介。":"取消即暂时跳过，不改双方。"),{choices:[["local","使用手机版本","danger"],...(supported?[["remote","使用世界书版本"],["merge","手动合并"]]:[]),["cancel","暂时跳过"]]});
+        check();if(!decision||decision.choice==="cancel")return;
+        let merged="";
+        if(decision.choice==="merge"){const form=await ui.dialog("手动合并",field("合并后世界书正文","content",r.content,{textarea:true,max:8000,required:true})+hint("此正文会写入世界书，并按该来源的回读规则更新手机。"));check();if(!form)return;merged=form.content;}
+        if(!await ui.confirm("确认处理这一条冲突？","将先保存双方备份，再写入所选结果；手机与远端不是原子事务。失败时核对双方再重试。","确认处理"))return;
+        check();await safetyResolve(eng.bookStudio,p,key,decision.choice,merged);ui.notify("已处理；其他冲突保持不变");ui.render();return;
+      }
+      const selectable=rows.filter(r=>r.kind!=="conflictKeys"&&!r.unsupported);
+      const summary=`新增 ${p.plan.create.length} · 修改 ${p.plan.update.length} · 待取回 ${p.plan.pull.length} · 删除 ${p.plan.deleteWB.length} · 冲突 ${p.plan.conflicts}。冲突与不支持回灌项不执行。自动同步不会逐次弹确认；如需逐条审批，请先关闭自动同步。`;
+      const picked=await reviewPick(ui,"工坊同步变更预览",rows,{submit:"确认选择",note:summary});if(!picked?.length)return;
+      const valid=new Set(selectable.map(r=>r.key)),keys=picked.map(r=>r.key).filter(k=>valid.has(k));
+      assert(keys.length,"选中项均为冲突或不可回灌项，请使用冲突处理入口");
+      if(!await ui.confirm("只执行选中的 "+keys.length+" 项？","未选变更本次不执行；后续自动同步仍可能执行。包含删除时请特别核对。","执行所选"))return;
+      check();await eng.bookStudio.sync({reason:"preview",force:true,acceptMassDelete:true,selection:{...p,keys}});ui.notify("选中变更已执行；未选项留待后续同步");ui.render();return;
+    }
+    if(action==="safe-import-scope") {
+      const mb=eng.memoryBook;assert(mb.cfg?.linked&&!mb.running,"请先连接记忆世界书，等待同步结束");
+      const p={snap,book:mb.cfg.name,inputSig:fingerprint([ui.data.memoryBook,ui.data.memories])};
+      const entries=await eng.bridge.wbRead(p.book);check();p.remoteSig=fingerprint(entries);
+      const rows=entries.filter(r=>!bookStampOf(r)&&(r.uid??r.id)!==undefined).map((r,i)=>({key:String(i),uid:r.uid??r.id,name:r.name||r.comment||"未命名",content:r.content||""}));
+      const cfg=mb.cfg,ids=cfg.selectionBook===p.book?cfg.importUids:null;
+      const picked=await reviewPick(ui,"管理记忆导入范围",rows,{checked:rows.filter(r=>!Array.isArray(ids)||ids.includes(r.uid)).map(r=>r.key),submit:"保存范围",note:"勾选控制新条目的导入；取消勾选不删除记忆，也不解除已有绑定。保存后可点立即同步；自动同步开启时后续也会读取新范围。"});
+      if(picked===null)return;check();await safetyImportScope(eng,p,picked.map(r=>r.uid));ui.notify("导入范围已保存，无需停止或重连世界书");ui.render();return;
+    }
+    if(action==="safe-recycle-import") {
+      const before=fingerprint(ui.data.recycle||[]),file=await ui.pickFile(".json,application/json",4*1024*1024);check();if(!file)return;
+      const raw=JSON.parse(await file.text());check();const draft={recycle:clone(ui.data.recycle||[])};recycleImport(draft,raw);
+      if(!await ui.confirm("导入回收站备份？","仅合入回收站，不自动恢复、不写世界书。重复的备份内容会跳过；导入后可逐项预览再恢复。","导入"))return;
+      check();await eng.repo.mutate(s=>{assert(before===fingerprint(s.recycle||[]),"回收站已变化，请刷新");recycleImport(s,raw);},{snapshot:snap,guard:()=>{check();return true;},label:"导入回收站备份"});ui.notify("已导入回收站，请预览后选择恢复");ui.render();return;
+    }
+    if(action==="safe-recycle") {
+      const before=fingerprint(ui.data.recycle||[]);
+      const rows=(ui.data.recycle||[]).map(r=>({key:r.id,name:({memory:"记忆",soul:"灵魂档案",conflict:"冲突备份"}[r.kind])+" · "+r.name,note:new Date(r.at).toLocaleString(),content:JSON.stringify(r.payload,null,2)}));
+      const picked=await reviewPick(ui,"本聊天回收站",rows,{submit:"选择操作",note:"最多60条且JSON正文总计50万字符；满时阻止新的删除/冲突处理，不静默淘汰。记忆恢复为本地副本，灵魂恢复后排除工坊写出；冲突备份仅查看/导出。"});
+      if(!picked?.length)return;
+      const decision=await ui.dialog("回收站操作",hint("恢复不会覆盖同名档案；永久删除不可撤销。导出文件包含选中的原文，请妥善保管。"),{choices:[["restore","仅恢复到本地","primary"],["export","导出所选"],["purge","永久删除所选","danger"],["cancel","取消"]]});
+      check();if(!decision||decision.choice==="cancel")return;
+      const ids=picked.map(r=>r.key);
+      if(decision.choice==="export"){download(ui,"小手机回收站备份.json",{app:"tsukiyo-phone",kind:"recycle",version:VERSION,records:(ui.data.recycle||[]).filter(r=>ids.includes(r.id))});return;}
+      if(!await ui.confirm(decision.choice==="purge"?"永久删除所选备份？":"仅恢复到本地？",decision.choice==="purge"?"不可撤销，请先导出重要内容。":"记忆恢复成新ID本地副本；取消原记忆尚未执行的删除队列。灵魂档案恢复后暂停写出，不恢复推演历史。","确认"))return;
+      check();await eng.repo.mutate(s=>{assert(before===fingerprint(s.recycle||[]),"回收站已变化，请刷新");if(decision.choice==="restore")recycleRestore(s,ids);else s.recycle=(s.recycle||[]).filter(r=>!ids.includes(r.id));},{snapshot:snap,guard:()=>{check();return true;},label:"回收站操作"});ui.render();return;
+    }
+    if(action==="safe-memory-publish") {
+      const m=ui.data.memories.find(r=>r.id===value);assert(m?.localOnly,"此条不是本地恢复副本");const sig=fingerprint(m);
+      if(!await ui.confirm("允许此记忆写入世界书？","恢复副本使用新ID；若旧远端条目还在，可能形成两条，请先核对。","允许写出"))return;
+      check();await eng.repo.mutate(s=>{const row=s.memories.find(r=>r.id===value);assert(fingerprint(row)===sig,"记忆已变化");delete row.localOnly;},{snapshot:snap,guard:()=>{check();return true;},label:"允许恢复记忆写出"});eng.memoryBook.notePhoneChange();ui.render();return;
+    }
+    if(action==="safe-diagnostics") {
+      const report=await safetyDiagnostics(eng);check();
+      const result=await ui.dialog("升级与兼容性自检",hint("只检查当前可见接口和活动实例，不能穷举未加载的旧脚本；多楼层复用不等于多个实例。此报告不含密钥、API地址、聊天原文或世界书正文。")+`<pre style="white-space:pre-wrap">${e(JSON.stringify(report,null,2))}</pre>`,{choices:[["export","导出诊断"],["close","关闭"]]});
+      check();if(result?.choice==="export")download(ui,"小手机脱敏诊断.json",report);return;
     }
   }
   // src/ui/renderer.js
@@ -13382,6 +13590,8 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
     const host = rootWindow(source), key = mode === "demo" ? "__TSUKIYO_PHONE_DEMO__" : "__TSUKIYO_PHONE__";
     if (host[key] && !host[key].disposed) {
       const current = host[key];
+      current.loadedVersions = [...new Set([...(current.loadedVersions || [current.version]), VERSION])];
+      if (current.version !== VERSION) current.ui.notify("检测到不同手机版本同时加载，请停用旧脚本并刷新后再使用新功能", "error");
       if (mode === "extension") {
         current.native = true;
         current.engine.bridge.registerSource(source);
@@ -13390,7 +13600,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
       return current;
     }
     const bridge = mode === "demo" ? new DemoBridge(host) : new TavernBridge(host, source), engine = new PhoneEngine(bridge), ui = new PhoneUI(engine, { demo: mode === "demo" });
-    const app = { version: VERSION, engine, ui, native: mode === "extension", disposed: false, home: mode === "card" ? source : null, standby: /* @__PURE__ */ new Set(), cardSources: /* @__PURE__ */ new Set(), hideListeners: /* @__PURE__ */ new Map(), open: (view, id2) => ui.open(view, id2), close: () => ui.close(), dispose() {
+    const app = { version: VERSION, loadedVersions: [VERSION], engine, ui, native: mode === "extension", disposed: false, home: mode === "card" ? source : null, standby: /* @__PURE__ */ new Set(), cardSources: /* @__PURE__ */ new Set(), hideListeners: /* @__PURE__ */ new Map(), open: (view, id2) => ui.open(view, id2), close: () => ui.close(), dispose() {
       if (app.disposed) return;
       app.disposed = true;
       for (const off of app.hideListeners.values()) off();

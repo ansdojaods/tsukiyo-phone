@@ -1,4 +1,4 @@
-/* 月夜来信 · 小手机 v2.9.3（灵魂档案路由修复 · 批量删除 · 世界书条目预览与管理 · 已有世界书连接 · 同步与异步结果保护）原创实现；升级前备份。 */
+/* 月夜来信 · 小手机 v2.9.4（工坊同步预览 · 冲突处理 · 本地回收站 · 记忆导入范围管理 · 升级自检）升级前备份；自动同步不会逐次要求审批。 */
 var TSUKIYO_PRESET = /*@@PRESET@@*/null/*@@END@@*/;
 var TsukiyoPhoneBundle = (() => {
   var PRESET = typeof TSUKIYO_PRESET === "object" && TSUKIYO_PRESET && Array.isArray(TSUKIYO_PRESET.contacts) ? TSUKIYO_PRESET : null;

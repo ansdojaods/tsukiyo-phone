@@ -64,7 +64,7 @@
       const rows = Object.values(soulData(ui.data).roster).filter(r => action !== "soul-char-del" || r.name === value).map(r => ({ key: r.name, name: r.name, content: soulRender(soulData(ui.data), r.name) }));
       const picked = await reviewPick(ui, "批量删除灵魂链接角色", rows, { submit: "删除选中档案", checked: action === "soul-char-del" ? [value] : [], note: "只删除手机灵魂档案及其推演历史，不删通讯录或记忆。若工坊启用灵魂档案同步，后续同步也会移除已纳入当前同步的对应工坊条目（大量移除需确认）。" });
       if (!picked?.length) return;
-      if (!await ui.confirm("确认删除 " + picked.length + " 位角色的灵魂档案？", "此操作不可单独撤销，建议先导出名单。", "删除")) return;
+      if (!await ui.confirm("确认删除 " + picked.length + " 位角色的灵魂档案？", "档案正文可从本聊天回收站恢复，推演历史不恢复；回收站满时会阻止删除。建议先导出名单。", "删除")) return;
       check();
       await eng.repo.mutate(s => { assert(fingerprint(soulData(s).roster) === before, "档案在预览后变化，请重新选择"); reviewSoulDelete(s, picked.map(r => r.key)); }, { snapshot: snap, label: "批量删除灵魂档案" });
       eng.soul.clearRoleplay(); eng.bookStudio.notePhoneChange(); ui.go("soul"); return;
@@ -95,7 +95,7 @@
     if (action === "review-memory-manage") {
       const before = fingerprint([ui.data.memories, ui.data.memoryBook]);
       const rows = ui.data.memories.filter(notBaibai).map(m => ({key:m.id, name:memoryTitle(m), content:m.text, note:m.wb ? "已关联世界书" : "手机本地记忆"}));
-      const picked = await reviewPick(ui, "记忆条目预览 / 批量删除", rows, {submit:"删除所选记忆", note:"这里会删除手机记忆本身；已连接的对应记忆世界书条目将在同步时删除。工坊条目、柏宝书镜像和第三方书本体不在此列表。请先备份。"});
+      const picked = await reviewPick(ui, "记忆条目预览 / 批量删除", rows, {submit:"删除所选记忆", checked:value === "all" ? rows.map(r=>r.key) : [], note:"这里会删除手机记忆本身；已连接的对应记忆世界书条目将在同步时删除。工坊条目、柏宝书镜像和第三方书本体不在此列表。请先备份。"});
       if (!picked?.length || !await ui.confirm("确认删除 " + picked.length + " 条记忆？", "不同于工坊的排除写出，此操作会删除手机中的所选记忆；已关联的远端条目将在同步时删除。", "删除")) return;
       const guard = () => { check(); assert(before === fingerprint([eng.repo.data.memories, eng.repo.data.memoryBook]), "记忆或同步配置已变化，请重新选择"); return true; };
       await eng.repo.mutate(s => { for (const row of picked) eng.memoryBook.removeLinked(s, row.key); }, {snapshot:snap, guard, label:"预览后批量删除记忆"});
@@ -111,7 +111,7 @@
       check(); if (!result) return;
       const remote = await eng.bridge.wbRead(result.name); check();
       const rows = remote.filter(r => !memory || !bookStampOf(r)).filter(r => (r.uid ?? r.id) !== undefined).map((r, i) => ({ key: String(i), uid: r.uid ?? r.id, name: r.name || r.comment || "未命名条目", content: r.content || "" }));
-      const selected = await reviewPick(ui, memory ? "选择要导入的记忆条目" : "现有世界书条目预览", rows, { submit: memory ? "连接并导入选中条目" : "确认连接", note: memory ? "只导入选中条目；其他条目保留原样，不删除；以后新增的未选条目也不会自动导入，如需增加请停止同步后重新选择。工坊条目不在本记忆列表中，可到工坊预览。手机已有记忆会同步写入此书。" : "这里只预览，勾选不会删除或导入第三方条目。连接后将按当前来源设置写出手机数据。" });
+      const selected = await reviewPick(ui, memory ? "选择要导入的记忆条目" : "现有世界书条目预览", rows, { submit: memory ? "连接并导入选中条目" : "确认连接", note: memory ? "只导入选中条目；其他条目保留原样，不删除；以后新增的未选条目也不会自动导入，可用“管理导入范围”追加勾选。工坊条目不在本记忆列表中，可到工坊预览。手机已有记忆会同步写入此书。" : "这里只预览，勾选不会删除或导入第三方条目。连接后将按当前来源设置写出手机数据。" });
       if (selected === null) return;
       check(); const fresh = await eng.bridge.wbRead(result.name); check(); assert(fingerprint(fresh) === fingerprint(remote), "世界书在预览后变化，请重新读取");
       await service.link({ name: result.name, scope: result.scope, acceptExisting: true, ...(memory ? { importUids: selected.map(r => r.uid) } : {}) });

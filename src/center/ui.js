@@ -478,7 +478,8 @@
       this.lastHash = "";
       return this.sync({ reason: "rebuild", force: true, acceptMassDelete: true });
     }
-    async sync({ reason = "auto", force = false, acceptMassDelete = false } = {}) {
+    async sync({ reason = "auto", force = false, acceptMassDelete = false, selection = null } = {}) {
+      if (selection) assert(!this.stopped && this.cfg?.linked && !this.running, "工坊连接或执行状态变化，请重新预览");
       if (this.stopped || !this.cfg?.linked) return null;
       if (this.running) {
         this.again = true;
@@ -488,6 +489,7 @@
         this.schedule(4e3);
         return null;
       }
+      if (selection) { reviewAssert(this.eng, selection.snap); assert(!this.running, "工坊正在同步，请重新预览"); }
       const runSnap = this.bridge.capture();
       this.running = true;
       this.publish({ phase: "syncing" });
@@ -495,6 +497,7 @@
         const cfg = this.cfg, book = cfg.name;
         const snap = this.bridge.capture(), data = this.eng.repo.data;
         const inputSig = fingerprint([data.bookSync, this.recordsFor(data, snap)]);
+        if (selection) assert(selection.book === book && selection.inputSig === inputSig, "手机数据或连接在预览后变化，请重新预览");
         const guard = () => { reviewAssert(this.eng, snap); assert(inputSig === fingerprint([this.eng.repo.data.bookSync, this.recordsFor(this.eng.repo.data, snap)]), "手机数据已变化，旧同步结果未提交"); return true; };
         const names3 = await this.bridge.wbNames();
         if (!names3.includes(book)) {
@@ -504,6 +507,7 @@
         }
         const entries = await this.bridge.wbRead(book);
         guard();
+        if (selection) assert(reviewBookSig(entries) === selection.remoteSig, "世界书在预览后变化，请重新预览");
         const mine = new Map();
         for (const e2 of entries) {
           const st = bookStampOf(e2);
@@ -511,24 +515,11 @@
         }
         const recs = this.recordsFor(data, snap);
         const byKey = new Map(recs.map((r) => [r.key, r]));
-        const plan = { create: [], update: [], pull: [], keep: 0, deleteWB: [], conflicts: 0 };
-        for (const r of recs) {
-          const hit = mine.get(r.key);
-          if (!hit) {
-            plan.create.push(r.key);
-            continue;
-          }
-          const base = String(hit.st.hash || ""), local = r.hash, remote = bookContentSig(bookEntryContent(hit.e));
-          const localBase = (cfg.syncBases || []).find(x => x.key === r.key)?.local || base;
-          if (local === localBase && remote === base) plan.keep++;
-          else if (local !== localBase && remote === base) plan.update.push(r.key);
-          else if (local === localBase && remote !== base) plan.pull.push(r.key);
-          else {
-            // Both sides changed: preserve both; do not silently overwrite either copy.
-            plan.conflicts++;
-          }
+        const plan = safetyPlan(recs, entries, cfg);
+        if (selection) {
+          const chosen = new Set(selection.keys);
+          for (const k of ["create", "update", "pull", "deleteWB"]) plan[k] = plan[k].filter(key => chosen.has(key));
         }
-        for (const [key] of mine) if (!byKey.has(key) && (cfg.managedKeys || []).includes(key)) plan.deleteWB.push(key);
         let guarded = "";
         if (plan.deleteWB.length >= 5 && plan.deleteWB.length > Math.max(2, Math.floor(mine.size * 0.5))) {
           if (!acceptMassDelete) {
@@ -592,7 +583,7 @@
           const localRows = this.recordsFor(s, snap), activeKeys = new Set(localRows.map(r => r.key));
           bs.syncBases = (bs.syncBases || []).filter(x => activeKeys.has(x.key) && !pulledKeys.has(x.key) && !updatedKeys.has(x.key));
           for (const r of localRows) if (pulledKeys.has(r.key)) bs.syncBases.push({key:r.key, local:r.hash});
-          bs.managedKeys = [...new Set([...byKey.keys(), ...(bs.managedKeys || [])])].filter(k => view.has(k) || byKey.has(k)).slice(0, 4000);
+          bs.managedKeys = [...new Set([...(selection ? [...plan.create, ...plan.update, ...plan.pull] : byKey.keys()), ...(bs.managedKeys || [])])].filter(k => view.has(k) || byKey.has(k)).slice(0, 4000);
           bs.lastSyncAt = Date.now();
           bs.stats = stats;
           bs.lastError = guarded === "held" ? "本地来源减少，已暂停大量删除远端工坊条目：请核对后确认清理" : plan.conflicts ? "手机与世界书同时修改：已保留双方，未自动覆盖。请预览核对后手动处理或备份后重建。" : "";
