@@ -26,9 +26,13 @@
       const mb = data.memoryBook;
       assert(isObject(mb) && typeof mb.name === "string" && mb.name.length <= 200 && ["card", "chat"].includes(mb.scope) && typeof mb.linked === "boolean" && typeof mb.autoSync === "boolean" && Array.isArray(mb.pendingDelete) && mb.pendingDelete.length <= 500, "记忆世界书配置错误");
     }
+    if (data.memoryBook?.importUids !== undefined) assert(Array.isArray(data.memoryBook.importUids) && data.memoryBook.importUids.length <= 10000 && data.memoryBook.importUids.every(x => typeof x === "string" || Number.isFinite(x)), "记忆导入选择无效");
     if (data.bookSync !== void 0) {
       const bs = data.bookSync;
       assert(isObject(bs) && typeof bs.name === "string" && bs.name.length <= 200 && ["card", "chat"].includes(bs.scope) && typeof bs.linked === "boolean" && typeof bs.autoSync === "boolean" && Array.isArray(bs.pendingDelete) && bs.pendingDelete.length <= 2000, "世界书工坊配置错误");
+      if (bs.managedKeys !== void 0) assert(Array.isArray(bs.managedKeys) && bs.managedKeys.length <= 4000 && bs.managedKeys.every(k => typeof k === "string" && k.length <= 200), "工坊托管清单无效");
+      if (bs.syncBases !== void 0) assert(Array.isArray(bs.syncBases) && bs.syncBases.length <= 2000 && bs.syncBases.every(x => x && typeof x.key === "string" && typeof x.local === "string"), "工坊同步基准无效");
+      if (bs.excludedKeys !== void 0) assert(Array.isArray(bs.excludedKeys) && bs.excludedKeys.length <= 2000 && bs.excludedKeys.every(k => typeof k === "string" && k.length <= 200), "工坊排除清单无效");
       if (bs.sources !== void 0) assert(isObject(bs.sources) && Object.values(bs.sources).every((x) => typeof x === "boolean"), "世界书工坊来源配置错误");
       if (bs.prefix !== void 0) assert(typeof bs.prefix === "string" && bs.prefix.length <= 20, "世界书条目前缀过长");
       if (bs.maxEntries !== void 0) assert(Number.isInteger(bs.maxEntries) && bs.maxEntries >= 20 && bs.maxEntries <= 2000, "世界书条目上限无效");

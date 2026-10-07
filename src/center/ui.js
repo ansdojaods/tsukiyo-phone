@@ -116,7 +116,7 @@
   });
   var bookFreshState = () => ({
     name: "", scope: "card", linked: false, autoSync: true, bound: false, lastSyncAt: 0, lastError: "",
-    pendingDelete: [], stats: null,
+    pendingDelete: [], excludedKeys: [], managedKeys: [], stats: null,
     sources: { diary: true, hearts: true, summaries: true, persona: true, agenda: true, notes: false, tasks: false, soul: false },
     prefix: "【小手机】", maxEntries: 400, pullBack: true, constantPersona: false
   });
@@ -187,13 +187,14 @@
       this.events.emit({ type: "status" });
       this.eng.emit("status");
     }
-    recordsFor(data, snap) {
-      const cfg = this.cfg, src = cfg.sources || {}, rows = [];
+    recordsFor(data, snap, { all = false } = {}) {
+      const cfg = data.bookSync || this.cfg, src = all ? Object.fromEntries(Object.keys(BOOK_SOURCES).map(k => [k, true])) : cfg.sources || {}, rows = [];
       const nameOf = (id2) => id2 === "user" ? "我" : data.contacts.find((c) => c.id === id2)?.name || "";
       const keyNames = (value) => [...new Set(data.contacts.map((c) => c.name).filter((n) => n && String(value).includes(n)))].slice(0, 8);
       const push = (r) => {
         if (!r.content) return;
-        rows.push({ ...r, content: String(r.content).trim().slice(0, 8e3), hash: bookContentSig(r.content) });
+        const content = String(r.content).trim().slice(0, 8e3);
+        rows.push({ ...r, content, hash: bookContentSig(content) });
       };
       if (src.diary) {
         for (const d of data.diary.filter((x) => x.kind !== "heart").slice(-cfg.maxEntries)) {
@@ -281,7 +282,7 @@
       }
       const cap = Math.max(20, Number(cfg.maxEntries) || 400);
       const sorted = rows.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
-      return sorted.slice(-cap);
+      return all ? sorted : sorted.filter(r => !(cfg.excludedKeys || []).includes(r.key)).slice(-cap);
     }
     counts(data = null) {
       const d = data || this.eng.repo.data;
@@ -357,24 +358,26 @@
         this.lastBookSig = sig;
       }, () => this.schedule(600));
     }
-    _mutate(fn, label) {
-      const snap = this.bridge.capture();
+    _mutate(fn, label, origin = null) {
+      const snap = origin || this.bridge.capture();
+      reviewAssert(this.eng, snap);
       const d = this.eng.repo.data;
       if (d && !isObject(d.bookSync)) d.bookSync = bookFreshState();
       if (d && !isObject(d.bookSync.sources)) d.bookSync.sources = { ...bookFreshState().sources };
       return this.eng.repo.mutate(fn, { label, snapshot: snap });
     }
-    async link({ name = "", scope = "card", acceptExisting = false } = {}) {
+    async link({ name = "", scope = "card", acceptExisting = false, sources = null } = {}) {
       assert(this.supported(), "需要酒馆助手的世界书接口（getWorldbook / createWorldbook / updateWorldbookWith）");
       const snap = this.bridge.capture();
       const book = cleanBookName(name) || defaultBookName(snap, scope).replace(/-小手机记忆/, "-小手机世界书");
       this.publish({ phase: "linking", note: "正在创建 / 连接世界书…" });
       try {
         const names3 = await this.bridge.wbNames();
+        reviewAssert(this.eng, snap);
         if (names3.includes(book)) {
           const rows = await this.bridge.wbRead(book);
-          const mine = rows.filter((r) => bookStampOf(r)).length;
-          if (rows.length && !mine && !acceptExisting) {
+          reviewAssert(this.eng, snap);
+          if (rows.length && !acceptExisting) {
             const err = Error("世界书「" + book + "」已经存在，里面有 " + rows.length + " 个条目。");
             err.code = "BOOK_EXISTS";
             err.count = rows.length;
@@ -382,15 +385,18 @@
             throw err;
           }
         } else assert(await this.bridge.wbCreate(book, []) || (await this.bridge.wbNames()).includes(book), "创建世界书失败");
+        reviewAssert(this.eng, snap);
         let bindError = "";
         const bound = await this.bridge.wbBind(book, scope).then(() => true, (e2) => {
           bindError = redactError(e2, []);
           return false;
         });
         await this._mutate((s) => {
+          if (s.bookSync.name !== book) { s.bookSync.managedKeys = []; s.bookSync.syncBases = []; }
+          if (sources) s.bookSync.sources = { ...s.bookSync.sources, ...sources };
           Object.assign(s.bookSync, { name: book, scope, linked: true, bound, autoSync: true, pendingDelete: [], lastError: bound ? "" : "世界书已创建，但没能绑定：" + bindError });
           log(s, "ok", "世界书工坊已连接：" + book, "memory");
-        }, "连接世界书工坊");
+        }, "连接世界书工坊", snap);
         this.lastHash = "";
         return await this.sync({ reason: "link", force: true });
       } finally {
@@ -447,11 +453,12 @@
       assert(cfg?.linked, "还没有连接世界书");
       const recs = new Set(this.recordsFor(this.eng.repo.data, this.bridge.capture()).map((r) => r.key));
       const entries = await this.bridge.wbRead(cfg.name);
-      const orphans = entries.filter((r) => bookStampOf(r) && !recs.has(String(bookStampOf(r).key)));
+      const managed = new Set(cfg.managedKeys || []);
+      const orphans = entries.filter((r) => bookStampOf(r) && managed.has(String(bookStampOf(r).key)) && !recs.has(String(bookStampOf(r).key)));
       if (!orphans.length) return { removed: 0 };
       await this.bridge.wbUpdate(cfg.name, (fresh) => fresh.filter((r) => {
         const st = bookStampOf(r);
-        return !(st && !recs.has(String(st.key)));
+        return !(st && managed.has(String(st.key)) && !recs.has(String(st.key)));
       }));
       this.lastHash = "";
       return { removed: orphans.length };
@@ -460,7 +467,8 @@
       const cfg = this.cfg;
       assert(cfg?.linked, "还没有连接世界书");
       const entries = await this.bridge.wbRead(cfg.name);
-      const mine = entries.filter((r) => bookStampOf(r)).map((r) => r.uid ?? r.id);
+      const managed = new Set([...(cfg.managedKeys || []), ...this.recordsFor(this.eng.repo.data, this.bridge.capture()).map(r => r.key)]);
+      const mine = entries.filter((r) => bookStampOf(r) && managed.has(String(bookStampOf(r).key))).map((r) => r.uid ?? r.id);
       await this.bridge.wbUpdate(cfg.name, (fresh) => fresh.filter((r) => !mine.includes(r.uid ?? r.id)));
       await this._mutate((s) => {
         s.bookSync.pendingDelete = [];
@@ -480,11 +488,14 @@
         this.schedule(4e3);
         return null;
       }
+      const runSnap = this.bridge.capture();
       this.running = true;
       this.publish({ phase: "syncing" });
       try {
         const cfg = this.cfg, book = cfg.name;
         const snap = this.bridge.capture(), data = this.eng.repo.data;
+        const inputSig = fingerprint([data.bookSync, this.recordsFor(data, snap)]);
+        const guard = () => { reviewAssert(this.eng, snap); assert(inputSig === fingerprint([this.eng.repo.data.bookSync, this.recordsFor(this.eng.repo.data, snap)]), "手机数据已变化，旧同步结果未提交"); return true; };
         const names3 = await this.bridge.wbNames();
         if (!names3.includes(book)) {
           const err = Error("世界书「" + book + "」不存在（可能在酒馆里被删除了）");
@@ -492,6 +503,7 @@
           throw err;
         }
         const entries = await this.bridge.wbRead(book);
+        guard();
         const mine = new Map();
         for (const e2 of entries) {
           const st = bookStampOf(e2);
@@ -507,15 +519,16 @@
             continue;
           }
           const base = String(hit.st.hash || ""), local = r.hash, remote = bookContentSig(bookEntryContent(hit.e));
-          if (local === base && remote === base) plan.keep++;
-          else if (local !== base && remote === base) plan.update.push(r.key);
-          else if (local === base && remote !== base) plan.pull.push(r.key);
+          const localBase = (cfg.syncBases || []).find(x => x.key === r.key)?.local || base;
+          if (local === localBase && remote === base) plan.keep++;
+          else if (local !== localBase && remote === base) plan.update.push(r.key);
+          else if (local === localBase && remote !== base) plan.pull.push(r.key);
           else {
-            plan.pull.push(r.key);
+            // Both sides changed: preserve both; do not silently overwrite either copy.
             plan.conflicts++;
           }
         }
-        for (const [key] of mine) if (!byKey.has(key)) plan.deleteWB.push(key);
+        for (const [key] of mine) if (!byKey.has(key) && (cfg.managedKeys || []).includes(key)) plan.deleteWB.push(key);
         let guarded = "";
         if (plan.deleteWB.length >= 5 && plan.deleteWB.length > Math.max(2, Math.floor(mine.size * 0.5))) {
           if (!acceptMassDelete) {
@@ -527,8 +540,10 @@
         let finalEntries = entries;
         if (plan.create.length || plan.update.length || plan.deleteWB.length || plan.pull.length) {
           const drop = new Set(plan.deleteWB), upd = new Set(plan.update), cre = new Set(plan.create);
-          const pullSet = new Set(cfg.pullBack === false ? [] : plan.pull);
+          const pullSet = new Set(cfg.pullBack === false ? [] : plan.pull.filter(key => !["soul", "tasks"].includes(byKey.get(key)?.src)));
           finalEntries = await this.bridge.wbUpdate(book, (fresh) => {
+            guard();
+            assert(reviewBookSig(fresh) === reviewBookSig(entries), "世界书已被并行修改，请重新同步");
             const out = [];
             for (const raw of fresh) {
               const st = bookStampOf(raw);
@@ -562,24 +577,29 @@
         for (const key of plan.pull) {
           const entry = view.get(key), r = byKey.get(key);
           if (!entry || !r) continue;
-          if (cfg.pullBack === false) {
+          if (cfg.pullBack === false || ["soul", "tasks"].includes(r.src)) {
             stats.skipped++;
             continue;
           }
           pulls.push({ key, id: r.id, src: r.src, content: bookEntryContent(entry), name: entry.name });
-          stats.pulled++;
         }
         await this.eng.repo.mutate((s) => {
           const applied = applyBookPulls(s, pulls, s.bookSync.name, cfg.pullBack !== false);
           stats.skipped += applied.skipped;
+          stats.pulled = applied.pulled;
           const bs = s.bookSync;
+          const pulledKeys = new Set(pulls.map(p => p.key)), updatedKeys = new Set(plan.update);
+          const localRows = this.recordsFor(s, snap), activeKeys = new Set(localRows.map(r => r.key));
+          bs.syncBases = (bs.syncBases || []).filter(x => activeKeys.has(x.key) && !pulledKeys.has(x.key) && !updatedKeys.has(x.key));
+          for (const r of localRows) if (pulledKeys.has(r.key)) bs.syncBases.push({key:r.key, local:r.hash});
+          bs.managedKeys = [...new Set([...byKey.keys(), ...(bs.managedKeys || [])])].filter(k => view.has(k) || byKey.has(k)).slice(0, 4000);
           bs.lastSyncAt = Date.now();
           bs.stats = stats;
-          bs.lastError = guarded === "held" ? "世界书里的条目被大量删除/清空，已暂停删除（保险丝）：请确认后选择“手机也一起清空”或以手机重建" : "";
+          bs.lastError = guarded === "held" ? "本地来源减少，已暂停大量删除远端工坊条目：请核对后确认清理" : plan.conflicts ? "手机与世界书同时修改：已保留双方，未自动覆盖。请预览核对后手动处理或备份后重建。" : "";
           if (applied.pulled) log(s, "info", "从世界书取回 " + applied.pulled + " 条修改（日记 / 摘要 / 备忘 / 约定 / 人物资料）", "memory");
-          if (applied.conflicts) log(s, "warning", "有 " + applied.conflicts + " 条两边都改过，已采用世界书版本", "memory");
+          if (plan.conflicts) log(s, "warning", "有 " + plan.conflicts + " 条双方都修改过，已保留双方并暂停自动覆盖", "memory");
           bs.pendingDelete = [];
-        }, { label: "世界书工坊同步", snapshot: snap });
+        }, { label: "世界书工坊同步", snapshot: snap, guard });
         this.lastHash = this.hashNow();
         this.lastBookSig = fingerprint(finalEntries.map((r) => [r.uid ?? r.id, r.name, r.content]));
         this.publish({ note: "" });
@@ -587,6 +607,7 @@
       } catch (err) {
         const message = err?.code === "BOOK_MISSING" ? err.message + "。可在本页重建，或停止同步。" : redactError(err, this.eng.settings.secrets());
         try {
+          reviewAssert(this.eng, runSnap);
           await this.eng.repo.mutate((s) => {
             s.bookSync.lastError = message;
           }, { label: "世界书工坊同步失败记录", snapshot: this.bridge.capture() });

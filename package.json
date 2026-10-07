@@ -1,0 +1,14 @@
+{
+  "name": "tsukiyo-phone",
+  "version": "2.9.3",
+  "private": true,
+  "scripts": {
+    "build": "node tools/release.js",
+    "test": "node tools/smoke_test.js && node tools/smoke_delegate.js && node tools/test_review.js",
+    "test:ui": "node tools/test_review_ui.cjs",
+    "verify": "npm run build && npm test && npm run test:ui"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

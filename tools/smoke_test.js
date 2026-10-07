@@ -2,7 +2,7 @@
    用法：node tools/smoke_test.js [path/to/tsukiyo-phone.js]  （全绿即通过）*/
 const fs = require("fs");
 const path = require("path");
-const FILE = process.argv[2] || path.join(__dirname, "..", "dist", "tsukiyo-phone-v2.9.2.js");
+const FILE = process.argv[2] || path.join(__dirname, "..", "dist", "tsukiyo-phone-v2.9.3.js");
 const src = fs.readFileSync(FILE, "utf8");
 let code = src.replace(/TsukiyoPhoneBundle\.start\([^)]*\);?\s*$/, "");
 // 测试用导出（不进入交付物）
@@ -164,6 +164,7 @@ function makeEngine(world) {
       bookStudio: { notePhoneChange: () => {} },
       router: { call: async (m, payload) => { engine.lastCall = { m, payload }; return JSON.stringify(engine.reply ?? {}); } }
     };
+    bridge.capture = () => engine.repo.snapshot;
     return { engine, data, injected };
   }
   const e9 = makeSoulEngine();
@@ -217,11 +218,11 @@ function makeEngine(world) {
   ok(typeof html === "string" && html.includes("灵魂链接") && html.includes("临安") && html.includes("data-form=\"soul\""), "名单页可渲染（含参数表单）");
   ok(typeof html2 === "string" && html2.includes("世界观") && html2.includes("data-form=\"soul-entry\"") && html2.includes("娇蛮明亮"), "角色档案页可渲染（五节 + 新增条目表单）");
 
-  ok(typeof soul9.exportRoster === "function" && soul9.exportRoster().kind === "roster" && soul9.exportRoster().roster["临安"], "「导出名单」按钮背后的 SoulStudio.exportRoster() 存在（v2.9.2 修掉了原先调用不存在方法的报错）");
+  ok(typeof soul9.exportRoster === "function" && soul9.exportRoster().kind === "roster" && soul9.exportRoster().roster["临安"], "「导出名单」按钮背后的 SoulStudio.exportRoster() 存在（v2.9.3 修掉了原先调用不存在方法的报错）");
   ok(!/SoulLinkBridge/.test(patched) && !/soullink-toggle/.test(patched) && !/this\.soullink/.test(patched) && /var PhoneEngine = class/.test(patched), "外部 SoulLink 扩展桥已移除（无 SoulLinkBridge / 无 soullink-* 动作），PhoneEngine 落在 core/engine.js 切片");
 
   console.log("\n[9] v2.8.0 静态检查");
-  ok(/version: "2.9.2"/.test(patched), "版本号（v2.8 的检查已随版本号移交 [12]）");
+  ok(/version: "2.9.3"/.test(patched), "版本号（v2.8 的检查已随版本号移交 [12]）");
   ok(/soul: "灵魂链接（NPC 档案与推演）"/.test(patched) && /routes: Object\.fromEntries\(Object\.keys\(MODULES\)/.test(patched), "MODULES 注册 soul，路由与开关自动派生（API 方案页可单独配 soul 方案）");
   ok(/soul: soulFresh\(\)/.test(patched) && /soulValidate\(data\.soul\)/.test(patched), "存档默认值与校验已接入");
   ok(/var SoulStudio = class/.test(patched) && /this\.soul = new SoulStudio\(this\)/.test(patched) && /this\.soul\.start\(\)/.test(patched) && /this\.soul\.dispose\(\)/.test(patched), "SoulStudio 已接入引擎生命周期");
@@ -387,9 +388,9 @@ function makeEngine(world) {
   const pull11b = await api11b.pull();
   ok(pull11b.ok === false && e11b.data.memApi.stats.fail === 1 && /指令|fetch|失败/.test(pull11b.note), "取不到资料时明确失败并计数，不写坏数据：" + pull11b.note.slice(0, 40));
 
-  console.log("\n[12] v2.9.2 静态检查");
-  ok(/version: "2.9.2"/.test(patched) && /小手机 v2\.9\.2/.test(patched), "版本号与头部注释 2.9.2");
-  ok(/delegate: \{ enabled: true, keepPhoneRecall: false/.test(patched) && /this\.assertOwner\(/.test(patched) && /msDelegateCard/.test(patched) && /楼层记忆由百宝月夜书接管/.test(patched), "v2.9.2 归属互斥已接入（默认开关 / 拦截 / 镜像 / 视图）");
+  console.log("\n[12] v2.9.3 静态检查");
+  ok(/version: "2.9.3"/.test(patched) && /小手机 v2\.9\.3/.test(patched), "版本号与头部注释 2.9.3");
+  ok(/delegate: \{ enabled: true, keepPhoneRecall: false/.test(patched) && /this\.assertOwner\(/.test(patched) && /msDelegateCard/.test(patched) && /楼层记忆由百宝月夜书接管/.test(patched), "v2.9.3 归属互斥已接入（默认开关 / 拦截 / 镜像 / 视图）");
   ok(/ms: msFresh\(\)/.test(patched) && /memApi: memApiFresh\(\)/.test(patched) && /msValidate\(data\.ms\)/.test(patched) && /memApiValidate\(data\.memApi\)/.test(patched), "存档默认值与校验已接入（旧存档自动补齐）");
   ok(/var MemoryStudio = class/.test(patched) && /this\.ms = new MemoryStudio\(this\)/.test(patched) && /this\.ms\.start\(\)/.test(patched) && /this\.ms\.dispose\(\)/.test(patched) && /this\.ms\.onGenerationEnded\(\)/.test(patched), "MemoryStudio 已接入引擎生命周期（启动 / 生成结束 / 卸载）");
   ok(/var MemoryApiLink = class/.test(patched) && /this\.memApi = new MemoryApiLink\(this\)/.test(patched), "MemoryApiLink 已接入引擎");

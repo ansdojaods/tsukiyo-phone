@@ -1,4 +1,4 @@
-/* 月夜来信 · 小手机 v2.9.2（记忆工作台 · 楼层记忆归属互斥 · 分层摘要 · 本地召回 · 状态账本 · 楼层收纳 · 百宝月夜书联动） ｜ 本版为一次“减重”整改：① 删除「外部 SoulLink 扩展桥」——它需要你先安装第三方酒馆扩展、并把手机记录写回别人的扩展设置，功能与小手机内置的「灵魂链接（NPC 档案 + 发送前推演）」重复，设置页与主页两处同名入口容易误解；现在只保留内置灵魂链接，数据全部在手机自己的存档里（不依赖、不读取任何外部扩展）；② 顺带清掉与本次相关及历年遗留的死代码（无调用点的旧页面 / 旧导入函数 / 重复导出函数），并把 PhoneEngine 组装类从 soullink-bridge.js 切片搬回它本该在的 core/engine.js；③ 修复「灵魂链接 → 导出名单」按钮调用了一个不存在的方法（会报错）的问题。原创实现 · 不含用户 API 密钥或聊天存档 */
+/* 月夜来信 · 小手机 v2.9.3（灵魂档案路由修复 · 批量删除 · 世界书条目预览与管理 · 已有世界书连接 · 同步与异步结果保护）原创实现；升级前备份。 */
 var TSUKIYO_PRESET = /*@@PRESET@@*/null/*@@END@@*/;
 var TsukiyoPhoneBundle = (() => {
   var PRESET = typeof TSUKIYO_PRESET === "object" && TSUKIYO_PRESET && Array.isArray(TSUKIYO_PRESET.contacts) ? TSUKIYO_PRESET : null;
@@ -31,7 +31,7 @@ var TsukiyoPhoneBundle = (() => {
   });
 
   // package.json
-  var package_default = { name: "tsukiyo-phone", version: "2.9.2", description: "月夜来信 · 独立实现的酒馆拟真社交与生活手机（酒馆助手脚本）：记忆工作台（分层摘要 / 状态账本 / 本地召回 / 楼层收纳） · 楼层记忆归属互斥（交给百宝月夜书时不重复生成） · 百宝月夜书公开API联动 · 灵魂链接内置（不再依赖外部 SoulLink 扩展） · 世界书工坊 · 主动来信无限 · 可读导出" };
+  var package_default = { name: "tsukiyo-phone", version: "2.9.3", description: "月夜来信 · 独立实现的酒馆拟真社交与生活手机（酒馆助手脚本）：记忆工作台（分层摘要 / 状态账本 / 本地召回 / 楼层收纳） · 楼层记忆归属互斥（交给百宝月夜书时不重复生成） · 百宝月夜书公开API联动 · 灵魂链接内置（不再依赖外部 SoulLink 扩展） · 世界书工坊 · 主动来信无限 · 可读导出" };
 
   // src/core/utils.js
   var VERSION = package_default.version;
@@ -2436,9 +2436,13 @@ ${from.bio.trim()}`;
       const mb = data.memoryBook;
       assert(isObject(mb) && typeof mb.name === "string" && mb.name.length <= 200 && ["card", "chat"].includes(mb.scope) && typeof mb.linked === "boolean" && typeof mb.autoSync === "boolean" && Array.isArray(mb.pendingDelete) && mb.pendingDelete.length <= 500, "记忆世界书配置错误");
     }
+    if (data.memoryBook?.importUids !== undefined) assert(Array.isArray(data.memoryBook.importUids) && data.memoryBook.importUids.length <= 10000 && data.memoryBook.importUids.every(x => typeof x === "string" || Number.isFinite(x)), "记忆导入选择无效");
     if (data.bookSync !== void 0) {
       const bs = data.bookSync;
       assert(isObject(bs) && typeof bs.name === "string" && bs.name.length <= 200 && ["card", "chat"].includes(bs.scope) && typeof bs.linked === "boolean" && typeof bs.autoSync === "boolean" && Array.isArray(bs.pendingDelete) && bs.pendingDelete.length <= 2000, "世界书工坊配置错误");
+      if (bs.managedKeys !== void 0) assert(Array.isArray(bs.managedKeys) && bs.managedKeys.length <= 4000 && bs.managedKeys.every(k => typeof k === "string" && k.length <= 200), "工坊托管清单无效");
+      if (bs.syncBases !== void 0) assert(Array.isArray(bs.syncBases) && bs.syncBases.length <= 2000 && bs.syncBases.every(x => x && typeof x.key === "string" && typeof x.local === "string"), "工坊同步基准无效");
+      if (bs.excludedKeys !== void 0) assert(Array.isArray(bs.excludedKeys) && bs.excludedKeys.length <= 2000 && bs.excludedKeys.every(k => typeof k === "string" && k.length <= 200), "工坊排除清单无效");
       if (bs.sources !== void 0) assert(isObject(bs.sources) && Object.values(bs.sources).every((x) => typeof x === "boolean"), "世界书工坊来源配置错误");
       if (bs.prefix !== void 0) assert(typeof bs.prefix === "string" && bs.prefix.length <= 20, "世界书条目前缀过长");
       if (bs.maxEntries !== void 0) assert(Number.isInteger(bs.maxEntries) && bs.maxEntries >= 20 && bs.maxEntries <= 2000, "世界书条目上限无效");
@@ -3906,7 +3910,7 @@ ${from.bio.trim()}`;
     const keys = (raw?.strategy?.keys || raw?.keys || []).map((k) => typeof k === "string" ? k : k && k.source ? "/" + k.source + "/" : String(k));
     return { uid: raw.uid ?? raw.id, name: String(raw.name ?? raw.comment ?? ""), content: String(raw.content ?? ""), keys: cleanKeys(keys), enabled: raw.enabled !== false, tid: String(raw.extra?.[MEMORY_TAG]?.id || ""), foreign: String(raw.extra?.[MEMORY_TAG]?.source || "") === "book-studio" };
   }
-  function planMemorySync(memories, rawEntries, { removed = [], newId = () => "memory-" + Math.random().toString(36).slice(2, 10) } = {}) {
+  function planMemorySync(memories, rawEntries, { removed = [], allowedImportUids = null, newId = () => "memory-" + Math.random().toString(36).slice(2, 10) } = {}) {
     const entries = rawEntries.map(normalizeEntry).filter((e2) => e2.uid !== void 0 && !e2.foreign);
     const byUid = new Map(entries.map((e2) => [e2.uid, e2]));
     const byTid = /* @__PURE__ */ new Map();
@@ -3969,6 +3973,7 @@ ${from.bio.trim()}`;
         plan.skipped.push({ uid: e2.uid, name: e2.name, reason: "内容超过 8000 字，没有导入" });
         continue;
       }
+      if (Array.isArray(allowedImportUids) && !allowedImportUids.includes(e2.uid)) continue;
       plan.import.push({ ...e2, mid: e2.tid && !memories.some((m) => m.id === e2.tid) ? e2.tid : newId() });
     }
     const dl = plan.deleteLocal.length;
@@ -5317,7 +5322,7 @@ ${from.bio.trim()}`;
       }
       const saved = this.saved()[this.cardKey(snap)];
       if (!saved || saved.scope !== "card") return;
-      this.link({ name: saved.name, scope: "card", acceptExisting: true }).catch(() => {
+      this.link({ name: saved.name, scope: "card", acceptExisting: true, importUids: saved.importUids ?? null }).catch(() => {
       });
     }
     /** 引擎在手机数据变化 / 世界书事件时调用：只有真正相关的变化才会触发同步 */
@@ -5343,20 +5348,23 @@ ${from.bio.trim()}`;
         if (this.bookSig(rows) !== this.lastBookSig) this.schedule(500);
       }, () => this.schedule(500));
     }
-    async _mutate(fn, label) {
-      const snap = this.bridge.capture();
+    async _mutate(fn, label, origin = null) {
+      const snap = origin || this.bridge.capture();
+      reviewAssert(this.eng, snap);
       return this.eng.repo.mutate(fn, { label, snapshot: snap });
     }
     /** 创建（或连接已有）世界书，并绑定到角色卡/聊天，然后做第一次同步。 */
-    async link({ name = "", scope = "card", acceptExisting = false } = {}) {
+    async link({ name = "", scope = "card", acceptExisting = false, importUids = null } = {}) {
       assert(this.supported(), "需要酒馆助手的世界书接口（getWorldbook / createWorldbook / updateWorldbookWith）；请确认已启用酒馆助手");
       const snap = this.bridge.capture();
       const book = cleanBookName(name) || defaultBookName(snap, scope);
       this.publish({ phase: "linking", note: "正在创建 / 连接世界书…" });
       try {
         const names3 = await this.bridge.wbNames();
+        reviewAssert(this.eng, snap);
         if (names3.includes(book)) {
           const rows = await this.bridge.wbRead(book);
+          reviewAssert(this.eng, snap);
           if (rows.length && !acceptExisting) {
             const err = Error("世界书「" + book + "」已经存在，里面有 " + rows.length + " 个条目。");
             err.code = "BOOK_EXISTS";
@@ -5365,17 +5373,20 @@ ${from.bio.trim()}`;
             throw err;
           }
         } else assert(await this.bridge.wbCreate(book, []) || (await this.bridge.wbNames()).includes(book), "创建世界书失败");
+        reviewAssert(this.eng, snap);
         let bindError = "";
         const bound = await this.bridge.wbBind(book, scope).then(() => true, (e2) => {
           bindError = redactError(e2, []);
           return false;
         });
         await this._mutate((s) => {
+          if (importUids !== null) { s.memoryBook.selectionBook = book; s.memoryBook.importUids = [...new Set(importUids)]; }
+          else if (s.memoryBook.selectionBook !== book) { delete s.memoryBook.selectionBook; delete s.memoryBook.importUids; }
           Object.assign(s.memoryBook, { name: book, scope, linked: true, bound, autoSync: true, lastError: bound ? "" : "世界书已创建，但没能绑定：" + bindError, pendingDelete: [] });
           log(s, "ok", "记忆世界书已连接：" + book, "memory");
-        }, "连接记忆世界书");
+        }, "连接记忆世界书", snap);
         this.lastHash = "";
-        this.remember(snap, scope === "card" ? { name: book, scope } : null);
+        this.remember(snap, scope === "card" ? { name: book, scope, importUids: this.cfg.selectionBook === book ? this.cfg.importUids : null } : null);
         return await this.sync({ reason: "link", force: true });
       } finally {
         this.publish({ phase: "idle" });
@@ -5449,13 +5460,17 @@ ${from.bio.trim()}`;
         this.schedule(4e3);
         return null;
       }
+      const runSnap = this.bridge.capture();
       this.running = true;
       this.publish({ phase: "syncing" });
       let result = null, agg = null, firstPlan = null;
       try {
         for (let round = 0; round < 3; round++) {
+          reviewAssert(this.eng, runSnap);
           const cfg = this.cfg, book = cfg.name, data = this.eng.repo.data;
           const snap = this.bridge.capture();
+          const inputSig = fingerprint([data.memoryBook, data.memories]);
+          const guard = () => { reviewAssert(this.eng, runSnap); assert(inputSig === fingerprint([this.eng.repo.data.memoryBook, this.eng.repo.data.memories]), "记忆或同步配置已变化，请重新同步"); return true; };
           const names3 = await this.bridge.wbNames();
           if (!names3.includes(book)) {
             const err = Error("世界书「" + book + "」不存在（可能在酒馆里被删除了）");
@@ -5463,14 +5478,16 @@ ${from.bio.trim()}`;
             throw err;
           }
           const entries = await this.bridge.wbRead(book);
+          guard();
           const handledRemoved = new Set(cfg.pendingDelete.map((r) => r.id));
-          const opts = () => ({ removed: cfg.pendingDelete, newId: () => id("memory") });
+          const opts = () => ({ removed: cfg.pendingDelete, allowedImportUids: cfg.selectionBook === book ? cfg.importUids : null, newId: () => id("memory") });
           let plan = planMemorySync(data.memories.filter(notBaibai), entries, opts());
           const needsWrite = plan.create.length || plan.update.length || plan.stamp.length || plan.deleteWB.length || plan.import.some((e2) => !e2.tid);
           let finalEntries = entries;
           if (needsWrite) {
             const byId = new Map(data.memories.map((m) => [m.id, m]));
             finalEntries = await this.bridge.wbUpdate(book, (fresh) => {
+              guard();
               plan = planMemorySync(data.memories.filter(notBaibai), fresh, opts());
               return applyPlanToEntries(fresh, plan, byId);
             });
@@ -5495,7 +5512,7 @@ ${from.bio.trim()}`;
             mb.pendingDelete = mb.pendingDelete.filter((r) => !handledRemoved.has(r.id));
             if (plan.skipped.length) log(s, "info", "有 " + plan.skipped.length + " 个世界书条目超过 8000 字，没有导入手机（世界书里保持原样）", "memory");
             if (stats.conflicts) log(s, "warning", "有 " + stats.conflicts + " 条记忆两边都改过，已采用世界书版本（手机旧内容可在记忆页恢复）", "memory");
-          }, { label: "记忆世界书同步", snapshot: snap });
+          }, { label: "记忆世界书同步", snapshot: snap, guard });
           this.lastBookSig = this.bookSig(finalEntries);
           this.lastHash = fingerprint([this.cfg.name, this.cfg.pendingDelete.length, this.eng.repo.data.memories.map((m) => [m.id, memorySig(m), !!m.wb])]);
           firstPlan = firstPlan || { create: plan.create.length, update: plan.update.length, pull: plan.pull.length, import: plan.import.length, deleteLocal: plan.deleteLocal.length, deleteWB: plan.deleteWB.length, guard: plan.guard };
@@ -5509,6 +5526,7 @@ ${from.bio.trim()}`;
       } catch (err) {
         const message = err?.code === "BOOK_MISSING" ? err.message + "。可以点“以手机记忆重建世界书”，或在设置里停止同步。" : redactError(err, this.eng.settings.secrets());
         try {
+          reviewAssert(this.eng, runSnap);
           await this.eng.repo.mutate((s) => {
             s.memoryBook.lastError = message;
           }, { label: "记忆世界书同步失败记录", snapshot: this.bridge.capture() });
@@ -6428,7 +6446,7 @@ ${from.bio.trim()}`;
   });
   var bookFreshState = () => ({
     name: "", scope: "card", linked: false, autoSync: true, bound: false, lastSyncAt: 0, lastError: "",
-    pendingDelete: [], stats: null,
+    pendingDelete: [], excludedKeys: [], managedKeys: [], stats: null,
     sources: { diary: true, hearts: true, summaries: true, persona: true, agenda: true, notes: false, tasks: false, soul: false },
     prefix: "【小手机】", maxEntries: 400, pullBack: true, constantPersona: false
   });
@@ -6499,13 +6517,14 @@ ${from.bio.trim()}`;
       this.events.emit({ type: "status" });
       this.eng.emit("status");
     }
-    recordsFor(data, snap) {
-      const cfg = this.cfg, src = cfg.sources || {}, rows = [];
+    recordsFor(data, snap, { all = false } = {}) {
+      const cfg = data.bookSync || this.cfg, src = all ? Object.fromEntries(Object.keys(BOOK_SOURCES).map(k => [k, true])) : cfg.sources || {}, rows = [];
       const nameOf = (id2) => id2 === "user" ? "我" : data.contacts.find((c) => c.id === id2)?.name || "";
       const keyNames = (value) => [...new Set(data.contacts.map((c) => c.name).filter((n) => n && String(value).includes(n)))].slice(0, 8);
       const push = (r) => {
         if (!r.content) return;
-        rows.push({ ...r, content: String(r.content).trim().slice(0, 8e3), hash: bookContentSig(r.content) });
+        const content = String(r.content).trim().slice(0, 8e3);
+        rows.push({ ...r, content, hash: bookContentSig(content) });
       };
       if (src.diary) {
         for (const d of data.diary.filter((x) => x.kind !== "heart").slice(-cfg.maxEntries)) {
@@ -6593,7 +6612,7 @@ ${from.bio.trim()}`;
       }
       const cap = Math.max(20, Number(cfg.maxEntries) || 400);
       const sorted = rows.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
-      return sorted.slice(-cap);
+      return all ? sorted : sorted.filter(r => !(cfg.excludedKeys || []).includes(r.key)).slice(-cap);
     }
     counts(data = null) {
       const d = data || this.eng.repo.data;
@@ -6669,24 +6688,26 @@ ${from.bio.trim()}`;
         this.lastBookSig = sig;
       }, () => this.schedule(600));
     }
-    _mutate(fn, label) {
-      const snap = this.bridge.capture();
+    _mutate(fn, label, origin = null) {
+      const snap = origin || this.bridge.capture();
+      reviewAssert(this.eng, snap);
       const d = this.eng.repo.data;
       if (d && !isObject(d.bookSync)) d.bookSync = bookFreshState();
       if (d && !isObject(d.bookSync.sources)) d.bookSync.sources = { ...bookFreshState().sources };
       return this.eng.repo.mutate(fn, { label, snapshot: snap });
     }
-    async link({ name = "", scope = "card", acceptExisting = false } = {}) {
+    async link({ name = "", scope = "card", acceptExisting = false, sources = null } = {}) {
       assert(this.supported(), "需要酒馆助手的世界书接口（getWorldbook / createWorldbook / updateWorldbookWith）");
       const snap = this.bridge.capture();
       const book = cleanBookName(name) || defaultBookName(snap, scope).replace(/-小手机记忆/, "-小手机世界书");
       this.publish({ phase: "linking", note: "正在创建 / 连接世界书…" });
       try {
         const names3 = await this.bridge.wbNames();
+        reviewAssert(this.eng, snap);
         if (names3.includes(book)) {
           const rows = await this.bridge.wbRead(book);
-          const mine = rows.filter((r) => bookStampOf(r)).length;
-          if (rows.length && !mine && !acceptExisting) {
+          reviewAssert(this.eng, snap);
+          if (rows.length && !acceptExisting) {
             const err = Error("世界书「" + book + "」已经存在，里面有 " + rows.length + " 个条目。");
             err.code = "BOOK_EXISTS";
             err.count = rows.length;
@@ -6694,15 +6715,18 @@ ${from.bio.trim()}`;
             throw err;
           }
         } else assert(await this.bridge.wbCreate(book, []) || (await this.bridge.wbNames()).includes(book), "创建世界书失败");
+        reviewAssert(this.eng, snap);
         let bindError = "";
         const bound = await this.bridge.wbBind(book, scope).then(() => true, (e2) => {
           bindError = redactError(e2, []);
           return false;
         });
         await this._mutate((s) => {
+          if (s.bookSync.name !== book) { s.bookSync.managedKeys = []; s.bookSync.syncBases = []; }
+          if (sources) s.bookSync.sources = { ...s.bookSync.sources, ...sources };
           Object.assign(s.bookSync, { name: book, scope, linked: true, bound, autoSync: true, pendingDelete: [], lastError: bound ? "" : "世界书已创建，但没能绑定：" + bindError });
           log(s, "ok", "世界书工坊已连接：" + book, "memory");
-        }, "连接世界书工坊");
+        }, "连接世界书工坊", snap);
         this.lastHash = "";
         return await this.sync({ reason: "link", force: true });
       } finally {
@@ -6759,11 +6783,12 @@ ${from.bio.trim()}`;
       assert(cfg?.linked, "还没有连接世界书");
       const recs = new Set(this.recordsFor(this.eng.repo.data, this.bridge.capture()).map((r) => r.key));
       const entries = await this.bridge.wbRead(cfg.name);
-      const orphans = entries.filter((r) => bookStampOf(r) && !recs.has(String(bookStampOf(r).key)));
+      const managed = new Set(cfg.managedKeys || []);
+      const orphans = entries.filter((r) => bookStampOf(r) && managed.has(String(bookStampOf(r).key)) && !recs.has(String(bookStampOf(r).key)));
       if (!orphans.length) return { removed: 0 };
       await this.bridge.wbUpdate(cfg.name, (fresh) => fresh.filter((r) => {
         const st = bookStampOf(r);
-        return !(st && !recs.has(String(st.key)));
+        return !(st && managed.has(String(st.key)) && !recs.has(String(st.key)));
       }));
       this.lastHash = "";
       return { removed: orphans.length };
@@ -6772,7 +6797,8 @@ ${from.bio.trim()}`;
       const cfg = this.cfg;
       assert(cfg?.linked, "还没有连接世界书");
       const entries = await this.bridge.wbRead(cfg.name);
-      const mine = entries.filter((r) => bookStampOf(r)).map((r) => r.uid ?? r.id);
+      const managed = new Set([...(cfg.managedKeys || []), ...this.recordsFor(this.eng.repo.data, this.bridge.capture()).map(r => r.key)]);
+      const mine = entries.filter((r) => bookStampOf(r) && managed.has(String(bookStampOf(r).key))).map((r) => r.uid ?? r.id);
       await this.bridge.wbUpdate(cfg.name, (fresh) => fresh.filter((r) => !mine.includes(r.uid ?? r.id)));
       await this._mutate((s) => {
         s.bookSync.pendingDelete = [];
@@ -6792,11 +6818,14 @@ ${from.bio.trim()}`;
         this.schedule(4e3);
         return null;
       }
+      const runSnap = this.bridge.capture();
       this.running = true;
       this.publish({ phase: "syncing" });
       try {
         const cfg = this.cfg, book = cfg.name;
         const snap = this.bridge.capture(), data = this.eng.repo.data;
+        const inputSig = fingerprint([data.bookSync, this.recordsFor(data, snap)]);
+        const guard = () => { reviewAssert(this.eng, snap); assert(inputSig === fingerprint([this.eng.repo.data.bookSync, this.recordsFor(this.eng.repo.data, snap)]), "手机数据已变化，旧同步结果未提交"); return true; };
         const names3 = await this.bridge.wbNames();
         if (!names3.includes(book)) {
           const err = Error("世界书「" + book + "」不存在（可能在酒馆里被删除了）");
@@ -6804,6 +6833,7 @@ ${from.bio.trim()}`;
           throw err;
         }
         const entries = await this.bridge.wbRead(book);
+        guard();
         const mine = new Map();
         for (const e2 of entries) {
           const st = bookStampOf(e2);
@@ -6819,15 +6849,16 @@ ${from.bio.trim()}`;
             continue;
           }
           const base = String(hit.st.hash || ""), local = r.hash, remote = bookContentSig(bookEntryContent(hit.e));
-          if (local === base && remote === base) plan.keep++;
-          else if (local !== base && remote === base) plan.update.push(r.key);
-          else if (local === base && remote !== base) plan.pull.push(r.key);
+          const localBase = (cfg.syncBases || []).find(x => x.key === r.key)?.local || base;
+          if (local === localBase && remote === base) plan.keep++;
+          else if (local !== localBase && remote === base) plan.update.push(r.key);
+          else if (local === localBase && remote !== base) plan.pull.push(r.key);
           else {
-            plan.pull.push(r.key);
+            // Both sides changed: preserve both; do not silently overwrite either copy.
             plan.conflicts++;
           }
         }
-        for (const [key] of mine) if (!byKey.has(key)) plan.deleteWB.push(key);
+        for (const [key] of mine) if (!byKey.has(key) && (cfg.managedKeys || []).includes(key)) plan.deleteWB.push(key);
         let guarded = "";
         if (plan.deleteWB.length >= 5 && plan.deleteWB.length > Math.max(2, Math.floor(mine.size * 0.5))) {
           if (!acceptMassDelete) {
@@ -6839,8 +6870,10 @@ ${from.bio.trim()}`;
         let finalEntries = entries;
         if (plan.create.length || plan.update.length || plan.deleteWB.length || plan.pull.length) {
           const drop = new Set(plan.deleteWB), upd = new Set(plan.update), cre = new Set(plan.create);
-          const pullSet = new Set(cfg.pullBack === false ? [] : plan.pull);
+          const pullSet = new Set(cfg.pullBack === false ? [] : plan.pull.filter(key => !["soul", "tasks"].includes(byKey.get(key)?.src)));
           finalEntries = await this.bridge.wbUpdate(book, (fresh) => {
+            guard();
+            assert(reviewBookSig(fresh) === reviewBookSig(entries), "世界书已被并行修改，请重新同步");
             const out = [];
             for (const raw of fresh) {
               const st = bookStampOf(raw);
@@ -6874,24 +6907,29 @@ ${from.bio.trim()}`;
         for (const key of plan.pull) {
           const entry = view.get(key), r = byKey.get(key);
           if (!entry || !r) continue;
-          if (cfg.pullBack === false) {
+          if (cfg.pullBack === false || ["soul", "tasks"].includes(r.src)) {
             stats.skipped++;
             continue;
           }
           pulls.push({ key, id: r.id, src: r.src, content: bookEntryContent(entry), name: entry.name });
-          stats.pulled++;
         }
         await this.eng.repo.mutate((s) => {
           const applied = applyBookPulls(s, pulls, s.bookSync.name, cfg.pullBack !== false);
           stats.skipped += applied.skipped;
+          stats.pulled = applied.pulled;
           const bs = s.bookSync;
+          const pulledKeys = new Set(pulls.map(p => p.key)), updatedKeys = new Set(plan.update);
+          const localRows = this.recordsFor(s, snap), activeKeys = new Set(localRows.map(r => r.key));
+          bs.syncBases = (bs.syncBases || []).filter(x => activeKeys.has(x.key) && !pulledKeys.has(x.key) && !updatedKeys.has(x.key));
+          for (const r of localRows) if (pulledKeys.has(r.key)) bs.syncBases.push({key:r.key, local:r.hash});
+          bs.managedKeys = [...new Set([...byKey.keys(), ...(bs.managedKeys || [])])].filter(k => view.has(k) || byKey.has(k)).slice(0, 4000);
           bs.lastSyncAt = Date.now();
           bs.stats = stats;
-          bs.lastError = guarded === "held" ? "世界书里的条目被大量删除/清空，已暂停删除（保险丝）：请确认后选择“手机也一起清空”或以手机重建" : "";
+          bs.lastError = guarded === "held" ? "本地来源减少，已暂停大量删除远端工坊条目：请核对后确认清理" : plan.conflicts ? "手机与世界书同时修改：已保留双方，未自动覆盖。请预览核对后手动处理或备份后重建。" : "";
           if (applied.pulled) log(s, "info", "从世界书取回 " + applied.pulled + " 条修改（日记 / 摘要 / 备忘 / 约定 / 人物资料）", "memory");
-          if (applied.conflicts) log(s, "warning", "有 " + applied.conflicts + " 条两边都改过，已采用世界书版本", "memory");
+          if (plan.conflicts) log(s, "warning", "有 " + plan.conflicts + " 条双方都修改过，已保留双方并暂停自动覆盖", "memory");
           bs.pendingDelete = [];
-        }, { label: "世界书工坊同步", snapshot: snap });
+        }, { label: "世界书工坊同步", snapshot: snap, guard });
         this.lastHash = this.hashNow();
         this.lastBookSig = fingerprint(finalEntries.map((r) => [r.uid ?? r.id, r.name, r.content]));
         this.publish({ note: "" });
@@ -6899,6 +6937,7 @@ ${from.bio.trim()}`;
       } catch (err) {
         const message = err?.code === "BOOK_MISSING" ? err.message + "。可在本页重建，或停止同步。" : redactError(err, this.eng.settings.secrets());
         try {
+          reviewAssert(this.eng, runSnap);
           await this.eng.repo.mutate((s) => {
             s.bookSync.lastError = message;
           }, { label: "世界书工坊同步失败记录", snapshot: this.bridge.capture() });
@@ -7095,8 +7134,8 @@ ${from.bio.trim()}`;
   }
   function soulEnsure(v, name, { aliases = [], source = "manual" } = {}) {
     const key = text(name, 40);
-    assert(key, "角色名不能为空");
-    if (!v.roster[key]) v.roster[key] = { name: key, aliases: [], sections: Object.fromEntries(SOUL_SECTIONS.map((k) => [k, []])), enabled: true, source, updatedAt: 0, floor: -1 };
+    assert(key && !["__proto__", "prototype", "constructor"].includes(key), "角色名为空或为保留名称");
+    if (!Object.prototype.hasOwnProperty.call(v.roster, key)) v.roster[key] = { name: key, aliases: [], sections: Object.fromEntries(SOUL_SECTIONS.map((k) => [k, []])), enabled: true, source, updatedAt: 0, floor: -1 };
     const row = v.roster[key];
     for (const a2 of aliases) if (a2 && !row.aliases.includes(text(a2, 40))) row.aliases.push(text(a2, 40));
     for (const k of SOUL_SECTIONS) if (!Array.isArray(row.sections[k])) row.sections[k] = [];
@@ -7213,7 +7252,7 @@ ${from.bio.trim()}`;
     assert(isObject(v) && typeof v.enabled === "boolean", "灵魂链接配置错误");
     assert(isObject(v.roster) && Object.keys(v.roster).length <= 200, "灵魂链接角色过多（上限 200）");
     for (const [name, row] of Object.entries(v.roster)) {
-      assert(isObject(row) && row.name === name && typeof row.name === "string" && row.name.length <= 40, "灵魂链接角色名错误");
+      assert(!["__proto__", "constructor", "prototype"].includes(name) && isObject(row) && row.name === name && typeof row.name === "string" && row.name.length <= 40, "灵魂链接角色名错误");
       assert(Array.isArray(row.aliases) && row.aliases.length <= 12, "灵魂链接别名过多");
       for (const key of SOUL_SECTIONS) {
         const rows = row.sections?.[key];
@@ -7345,20 +7384,22 @@ ${from.bio.trim()}`;
       const others = names.filter((n) => !hit.includes(n));
       return [...hit, ...others].slice(0, Math.max(1, limit));
     }
-    async ask(system, payload, { timeoutMs } = {}) {
-      const snap = this.eng.repo.snapshot;
+    async ask(system, payload, { timeoutMs, origin } = {}) {
+      const snap = origin || this.eng.repo.snapshot;
+      reviewAssert(this.eng, snap);
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort("timeout"), Math.max(5000, timeoutMs || this.cfg().timeoutMs));
       try {
         const raw = await this.eng.router.call("soul", { system, user: JSON.stringify(payload) }, { signal: ctrl.signal });
-        assert(this.eng.bridge.same(snap), "已切换聊天，结果未写入");
+        reviewAssert(this.eng, snap);
         return raw;
       } finally {
         clearTimeout(timer);
       }
     }
-    async mutate(fn, label) {
-      const snap = this.eng.repo.snapshot;
+    async mutate(fn, label, origin = null) {
+      const snap = origin || this.eng.repo.snapshot;
+      reviewAssert(this.eng, snap);
       return this.eng.repo.mutate(fn, { label, snapshot: snap });
     }
     /** 档案更新：单角色。includeBook 时额外读取该角色相关的世界书条目作为材料。 */
@@ -7367,6 +7408,7 @@ ${from.bio.trim()}`;
       assert(this.enabled(), "灵魂链接已关闭（或在模块开关里停用）");
       assert(soulData(s)?.roster?.[name], "角色不在灵魂链接名单里");
       const snap = this.eng.repo.snapshot;
+      const rowSig = fingerprint(soulData(s).roster[name]);
       const before = soulEntryCount(soulData(s).roster[name]);
       const payload = {
         角色: name,
@@ -7380,10 +7422,11 @@ ${from.bio.trim()}`;
         世界书片段: await this.bookSnippets(name).catch(() => []),
         楼层: snap.floor
       };
-      const raw = await this.ask(this.prompt("analyze"), payload);
+      const raw = await this.ask(this.prompt("analyze"), payload, { origin: snap });
       const delta = soulJson(raw);
       let stats = { added: 0, skipped: 0 };
       await this.mutate((d) => {
+        assert(soulData(d).roster[name] && fingerprint(soulData(d).roster[name]) === rowSig, "角色已删除或档案已修改，旧结果未写入");
         stats = soulMerge(soulData(d), name, delta, { floor: snap.floor, source: "ai" });
         const v = soulData(d);
         v.stats.analyzed++;
@@ -7393,7 +7436,7 @@ ${from.bio.trim()}`;
         v.last.floor = snap.floor;
         v.last.sig = fingerprint([name, snap.owner, snap.floor]);
         d.soul.log = [...v.log, { ts: Date.now(), kind: "info", text: name + "：档案 +" + stats.added + " 条" }].slice(-200);
-      }, "灵魂链接 · 档案更新");
+      }, "灵魂链接 · 档案更新", snap);
       this.log(name + "：新增 " + stats.added + " 条" + (stats.skipped ? "，跳过重复 " + stats.skipped + " 条" : ""), "ok");
       this.eng.bookStudio?.notePhoneChange?.();
       return { name, added: stats.added, skipped: stats.skipped, before, after: before + stats.added };
@@ -7459,13 +7502,15 @@ ${from.bio.trim()}`;
       assert(this.enabled(), "灵魂链接已关闭");
       const s = this.data(), row = soulData(s).roster[name];
       assert(row, "角色不在名单里");
+      const origin = this.eng.repo.snapshot, rowSig = fingerprint(row);
       const before = soulEntryCount(row);
       const payload = { 角色: name, 档案: SOUL_SECTIONS.reduce((o, k) => ({ ...o, [k]: (row.sections[k] || []).map((x) => x.text) }), {}) };
-      const raw = await this.ask(this.prompt("condense"), payload);
+      const raw = await this.ask(this.prompt("condense"), payload, { origin });
       const value = soulJson(raw);
       let after = 0;
       await this.mutate((d) => {
         const v = soulData(d), target = v.roster[name];
+        assert(target && fingerprint(target) === rowSig, "角色已删除或档案已修改，旧精编结果未写入");
         for (const key of SOUL_SECTIONS) {
           const rows = Array.isArray(value[key]) ? value[key] : null;
           if (!rows) continue;
@@ -7476,7 +7521,7 @@ ${from.bio.trim()}`;
         after = soulEntryCount(target);
         v.stats.runs++;
         v.stats.entries = Object.values(v.roster).reduce((n, r) => n + soulEntryCount(r), 0);
-      }, "灵魂链接 · 档案精编");
+      }, "灵魂链接 · 档案精编", origin);
       this.log(name + "：精编 " + before + " → " + after + " 条", "ok");
       return { name, before, after };
     }
@@ -7488,6 +7533,7 @@ ${from.bio.trim()}`;
       const target = snap || this.eng.repo.snapshot;
       const list = (names?.length ? names : this.candidates(target, s, roles.maxActors)).filter((n) => soulData(s).roster[n]).slice(0, Math.max(1, roles.maxActors));
       assert(list.length, "名单里还没有可推演的角色");
+      const rosterSig = fingerprint(list.map(n => soulData(s).roster[n]));
       if (this.busy) throw Error("灵魂链接已有任务在执行（稍后再试）");
       this.busy = true;
       this.phase = "roleplay";
@@ -7502,7 +7548,7 @@ ${from.bio.trim()}`;
             档案: SOUL_SECTIONS.reduce((o, k) => ({ ...o, [k]: (row.sections[k] || []).map((x) => x.text).slice(-20) }), {}),
             最近消息: ctx, 字数上限: cfg.maxChars, 楼层: target.floor
           };
-          const raw = await this.ask(this.prompt("roleplay"), payload);
+          const raw = await this.ask(this.prompt("roleplay"), payload, { origin: target });
           const value = soulJson(raw);
           return { name, text: text(value.text || value.独白 || "", Math.max(80, cfg.maxChars)) };
         });
@@ -7511,6 +7557,8 @@ ${from.bio.trim()}`;
           const first = results.find((r) => !r.ok);
           throw Error(first ? "推演失败：" + first.error : "推演没有返回内容");
         }
+        reviewAssert(this.eng, target);
+        assert(rosterSig === fingerprint(list.map(n => soulData(this.data()).roster[n])), "推演期间角色已删除或档案已修改，不注入旧结果");
         const inject = this.renderInjection(actors, target);
         const ok = this.eng.bridge.setPrompt(inject, SOUL_KEYS.roleplay, cfg.injectDepth);
         await this.mutate((d) => {
@@ -7521,7 +7569,7 @@ ${from.bio.trim()}`;
           v.last.actors = actors.map((x) => x.name);
           v.history = [...v.history, { ts: Date.now(), floor: target.floor, actors, ok }].slice(-20);
           d.soul.log = [...v.log, { ts: Date.now(), kind: "info", text: "推演：" + actors.map((x) => x.name).join("、") + (ok ? "" : "（注入接口未就绪）") }].slice(-200);
-        }, "灵魂链接 · 角色推演");
+        }, "灵魂链接 · 角色推演", target);
         this.log("推演完成：" + actors.map((x) => x.name).join("、") + (ok ? "，已注入正文" : "，但注入接口未就绪"), ok ? "ok" : "warning");
         return { actors, injected: ok, text: inject };
       } finally {
@@ -9951,6 +9999,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
   }
   async function handleAction(ui, action, value, target) {
     const engine = ui.engine;
+    if (action.startsWith("review-") || action === "soul-char-del") return reviewAction(ui, action, value);
     if (action.startsWith("center-")) return centerAction(ui, action, value);
     if (action.startsWith("st-")) return studioAction(ui, action, value);
     if (action.startsWith("avs-")) return handleVisualAction(ui, action, value);
@@ -10056,9 +10105,8 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
           ui.notify("记忆世界书「" + name + "」已创建并绑定。" + syncNote(res));
         } catch (err) {
           if (err.code !== "BOOK_EXISTS") throw err;
-          if (!await ui.confirm("连接已有的世界书？", "「" + err.book + "」已经存在，里面有 " + err.count + " 个条目。连接后这些条目会作为记忆导入手机；它们不会被改动，除非你之后在手机里编辑。", "连接并导入")) return;
-          const res = await mb.link({ name: err.book, scope: r.scope, acceptExisting: true });
-          ui.notify("已连接「" + err.book + "」。" + syncNote(res));
+          ui.notify("同名世界书已存在，请预览后勾选需要读取的条目。");
+          await reviewAction(ui, "review-memory-connect", err.book);
         }
         return;
       }
@@ -11048,20 +11096,15 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
       case "book-create": {
         const r = await ui.dialog("创建世界书工坊", hint("会新建一本世界书并追加绑定到当前角色卡（不动原有的世界书绑定）。手机里的日记、心迹、摘要、人物档案、约定、备忘会按你勾选的数据类型写成条目；可以在酒馆里直接修改，手机自动同步。") + field("世界书名称", "name", ui.data.bookSync?.name || defaultBookName(ui.snapshot, "card").replace(/-小手机记忆/, "-小手机世界书"), { required: true, max: 120 }) + select("范围", "scope", [["card", "整张角色卡共用（推荐：这张卡新开的聊天共用同一本）"], ["chat", "只给当前聊天用（每个聊天一本，互不混）"]], "card") + select("写入内容", "sources", [["all", "日记 + 心迹 + 摘要 + 人物档案 + 约定（推荐）"], ["light", "只写日记、心迹与约定"], ["persona", "只写人物档案（NPC 性格与资料）"]], "all"), { submit: "创建并同步" });
         if (!r) return;
-        if (r.sources !== "all") await ui.engine.bookStudio.setOptions({});
         try {
-          const res = await ui.engine.bookStudio.link({ name: r.name, scope: r.scope });
-          if (r.sources === "light") {
-            for (const [id2, on] of [["summaries", false], ["persona", false], ["notes", false], ["tasks", false]]) await ui.engine.bookStudio.setSource(id2, on);
-          } else if (r.sources === "persona") {
-            for (const [id2, on] of [["diary", false], ["hearts", false], ["summaries", false], ["agenda", false]]) await ui.engine.bookStudio.setSource(id2, on);
-            await ui.engine.bookStudio.setOptions({ constantPersona: false });
-          }
+          const sourceKeys = r.sources === "light" ? ["diary", "hearts", "agenda"] : r.sources === "persona" ? ["persona"] : ["diary", "hearts", "summaries", "persona", "agenda"];
+          const sources = Object.fromEntries(Object.keys(BOOK_SOURCES).map(k => [k, sourceKeys.includes(k)]));
+          const res = await ui.engine.bookStudio.link({ name: r.name, scope: r.scope, sources });
           const st = res?.stats;
           ui.notify("世界书已创建并绑定。" + (st ? `新增 ${st.created} 条、更新 ${st.updated} 条。` : ""));
         } catch (err) {
           if (err?.code === "BOOK_EXISTS") {
-            ui.notify("已存在同名世界书（" + err.count + " 个条目），没有覆盖。", "error");
+            ui.notify("已存在同名世界书（" + err.count + " 个条目），没有覆盖。请改用“读取已有世界书并同步”来预览连接。", "error");
           } else ui.notify(err?.message || "创建失败", "error");
         }
         return;
@@ -11245,7 +11288,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
         return;
       }
       case "soul-entry-del": {
-        const [name, section, entryId] = String(value || "").split("|");
+        const [name, section, entryId] = String(value || "").startsWith("[") ? JSON.parse(value) : String(value || "").split("|");
         await change(ui, (s) => {
           soulRemoveEntry(soulData(s), name, section, entryId);
         }, "删除灵魂链接条目");
@@ -11262,7 +11305,8 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
           for (const d of s.diary.filter((x) => x.author === c.id).slice(-4)) lines.push("【小手机·" + (d.kind === "heart" ? "心迹" : "日记") + "】" + text(d.text, 80));
           for (const a2 of s.agenda.filter((x) => String(x.title || "").includes(value)).slice(-4)) lines.push("【小手机·约定】" + text(a2.title, 60) + (a2.date ? "（" + a2.date + "）" : ""));
           assert(lines.length, "这个角色还没有可合入的手机记录");
-          added = engine.soul.pushPhoneLines(value, lines, { floor: ui.snapshot?.floor ?? -1 });
+          for (const line of lines) if (soulAddEntry(soulData(s), value, "记忆", line, { floor: ui.snapshot?.floor ?? -1, source: "phone" }).added) added++;
+          soulData(s).stats.entries = Object.values(soulData(s).roster).reduce((n, row) => n + soulEntryCount(row), 0);
         }, "灵魂链接 · 合入手机记录");
         ui.notify(added ? "已合入 " + added + " 条手机记录。" : "没有新内容（已去重）。");
         return;
@@ -12219,7 +12263,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
   function bookCard(ui) {
     const mb = ui.engine.memoryBook, b = mb.info();
     if (!b.supported) return `<div class="card">${hint("记忆世界书需要酒馆助手（世界书接口）。当前环境没有检测到，记忆仍照常保存在手机里，并通过“正文注入”进入剧情。", true)}</div>`;
-    if (!b.linked) return `<div class="card book-card"><h3>记忆世界书</h3><p class="tiny muted">把手机记忆同步到一本单独的世界书（默认名「${e(ui.data.memoryBook.name || "角色卡名-小手机记忆")}」），可以在酒馆里直接查看、修改、增删，手机和世界书<b>双向同步</b>；世界书绑定到角色卡后，记忆就以世界书条目的方式进入正文。</p><div class="buttons">${button(icon("book", 14) + " 创建并同步", "memory-book-create", "", "primary")}${button(icon("spark", 14) + " AI 生成一份记忆", "memory-book-generate")}</div></div>`;
+    if (!b.linked) return `<div class="card book-card"><h3>记忆世界书</h3><p class="tiny muted">可直接连接工坊已创建的世界书，无需再建一本；工坊档案与记忆分别管理，不重复导入。也可把手机记忆同步到一本单独的世界书（默认名「${e(ui.data.memoryBook.name || "角色卡名-小手机记忆")}」），可以在酒馆里直接查看、修改、增删，手机和世界书<b>双向同步</b>；世界书绑定到角色卡后，记忆就以世界书条目的方式进入正文。</p><div class="buttons">${button("读取已有世界书并同步", "review-memory-connect", "", "primary")}${button(icon("book", 14) + " 新建记忆世界书", "memory-book-create")}${button(icon("spark", 14) + " AI 生成一份记忆", "memory-book-generate")}</div></div>`;
     return `<div class="card book-card"><div class="row-top"><h3>${e(b.name)}</h3><span>${tag(b.scope === "chat" ? "仅本聊天" : "整张角色卡共用", "gold")} ${tag(b.bound ? "已绑定" : "未绑定", b.bound ? "" : "rose")}</span></div><p class="tiny muted">已同步 ${b.linkedCount} / ${b.total} 条 · 上次 ${e(clock(b.lastSyncAt))}${b.phase === "syncing" ? " · 正在同步…" : ""}</p>${b.lastError ? hint(b.lastError, true) : ""}${b.confirm ? `<div class="hint warning">世界书里有 ${b.confirm.count} 条记忆被删除或整本被清空。要让手机也跟着删除，还是以手机记忆重建世界书？</div><div class="buttons">${button("手机也一起删除", "memory-book-accept-delete", "", "danger")}${button("以手机记忆重建世界书", "memory-book-rebuild", "", "primary")}</div>` : ""}<div class="buttons">${button(icon("shuffle", 14) + " 立即同步", "memory-book-sync", "", "primary")}${button(icon("spark", 14) + " AI 生成记忆", "memory-book-generate")}${b.bound ? "" : button("重新绑定", "memory-book-rebind")}${b.lastError && /不存在|删除了/.test(b.lastError) ? button("以手机记忆重建世界书", "memory-book-rebuild") : ""}${button("停止同步", "memory-book-unlink")}</div>${switchRow("自动同步", "手机改了就写进世界书；世界书改了就拉回手机", "memory-book-autosync", b.autoSync)}</div>`;
   }
   function memoryCard(ui, m) {
@@ -12228,7 +12272,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
   }
   function memoryView(ui) {
     const s = ui.data;
-    return `<div class="pad"><div class="mini-stat">${icon("memory", 28)}<strong>${s.memories.length}</strong><span>条有范围的记忆<br>${s.summaries.length} 份会话摘要</span></div>${bookCard(ui)}${baibaiMemoryCard()}${msCard(ui)}${memApiCard(ui)}${memApiPreviewCard(ui)}${hint("原文、来源、知情者分别保留。邀请不是已经发生的行动；私人经历不会自动广播给其他角色。")}<div class="buttons">${button("整理新的交流", "summarize", "", "primary")}${button("查看正文注入", "inspect-injection")}${button(icon("plus", 14) + " 新增记忆", "new-memory")}</div>${s.memories.length ? tpDeleteBar("memories", s.memories.length, "记忆") : ""}${section("明确记录的事", s.memories.length ? [...s.memories].reverse().map((m) => memoryCard(ui, m)).join("") : empty("还没有需要特别记下的事", "可以手动新增，或点“AI 生成记忆”从正文里提炼；摘要只是长线辅助。", "book"))}${s.summaries.length ? section("滚动摘要", s.summaries.slice(-8).reverse().map((m) => `<details class="details"><summary>${e(s.threads.find((t) => t.id === m.threadId)?.title || "旧会话")} · 摘要</summary><p>${e(m.text)}</p></details>`).join("")) : ""}</div>`;
+    return `<div class="pad"><div class="mini-stat">${icon("memory", 28)}<strong>${s.memories.length}</strong><span>条有范围的记忆<br>${s.summaries.length} 份会话摘要</span></div>${bookCard(ui)}${baibaiMemoryCard()}${msCard(ui)}${memApiCard(ui)}${memApiPreviewCard(ui)}${hint("原文、来源、知情者分别保留。邀请不是已经发生的行动；私人经历不会自动广播给其他角色。")}<div class="buttons">${button("整理新的交流", "summarize", "", "primary")}${button("查看正文注入", "inspect-injection")}${button(icon("plus", 14) + " 新增记忆", "new-memory")}${button("条目预览 / 批量删除", "review-memory-manage")}</div>${s.memories.length ? tpDeleteBar("memories", s.memories.length, "记忆") : ""}${section("明确记录的事", s.memories.length ? [...s.memories].reverse().map((m) => memoryCard(ui, m)).join("") : empty("还没有需要特别记下的事", "可以手动新增，或点“AI 生成记忆”从正文里提炼；摘要只是长线辅助。", "book"))}${s.summaries.length ? section("滚动摘要", s.summaries.slice(-8).reverse().map((m) => `<details class="details"><summary>${e(s.threads.find((t) => t.id === m.threadId)?.title || "旧会话")} · 摘要</summary><p>${e(m.text)}</p></details>`).join("")) : ""}</div>`;
   }
 
   // src/ui/views-memory-studio.js — v2.9 记忆工作台
@@ -12364,23 +12408,24 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
   // src/ui/views-settings.js
   function bookView(ui) {
     const studio = ui.engine.bookStudio, b = studio.info();
-    if (!b.supported) return `<div class="pad">${hint("世界书工坊需要酒馆助手的世界书接口（getWorldbook / createWorldbook / updateWorldbookWith）。当前环境没有检测到；手机数据仍照常保存在手机里。", true)}${section("可以做什么", `<p class="tiny muted">连接一本世界书后，手机里的日记、恋爱心迹、摘要、人物档案（NPC 性格与资料）、约定、备忘与清单都可以作为条目写进世界书：关键词由人物名与日期自动生成，条目可以在酒馆里直接改，改完手机也能取回。</p>`)}</div>`;
+    const manage = `<div class="card"><h3>条目管理</h3><div class="buttons">${button("预览条目 / 批量移除", "review-book-manage")}${button("恢复已排除条目", "review-book-restore")}${!b.linked ? button("读取已有世界书并同步", "review-book-connect") : ""}</div><p class="tiny muted">移除仅针对本工坊条目，保留手机原始数据；灵魂档案支持写出和作为模型参考，不直接回灌五节档案。</p></div>`;
+    if (!b.supported) return `<div class="pad">${manage}${hint("世界书工坊需要酒馆助手的世界书接口（getWorldbook / createWorldbook / updateWorldbookWith）。当前环境没有检测到；手机数据仍照常保存在手机里。", true)}${section("可以做什么", `<p class="tiny muted">连接一本世界书后，手机里的日记、恋爱心迹、摘要、人物档案（NPC 性格与资料）、约定、备忘与清单都可以作为条目写进世界书：关键词由人物名与日期自动生成，条目可以在酒馆里直接改，改完手机也能取回。</p>`)}</div>`;
     if (!b.linked) {
-      return `<div class="pad"><div class="card book-card"><h3>世界书工坊</h3><p class="tiny muted">把手机数据同步成一本独立世界书（默认「角色卡名-小手机世界书」）。与「记忆世界书」互不冲突：记忆条目仍由记忆模块负责，这里负责日记、心迹、摘要、人物档案、约定、备忘与清单。</p><div class="buttons">${button(icon("book", 14) + " 创建并同步", "book-create", "", "primary")}${button(icon("file", 14) + " 预览将要写入的条目", "book-preview")}</div></div>${section("当前可写入的内容", `<div class="card">${Object.entries(BOOK_SOURCES).map(([id2, label]) => `<p class="tiny muted" style="margin:4px 0">${e(label)} · <b>${b.counts?.[id2] || 0}</b> 条</p>`).join("")}<p class="form-note">写入是可选的：每类数据都能单独开关；人物档案默认只写回、不覆盖手机。</p></div>`)}</div>`;
+      return `<div class="pad">${manage}<div class="card book-card"><h3>世界书工坊</h3><p class="tiny muted">把手机数据同步成一本独立世界书（默认「角色卡名-小手机世界书」）。与「记忆世界书」互不冲突：记忆条目仍由记忆模块负责，这里负责日记、心迹、摘要、人物档案、约定、备忘与清单。</p><div class="buttons">${button(icon("book", 14) + " 创建并同步", "book-create", "", "primary")}${button(icon("file", 14) + " 预览将要写入的条目", "book-preview")}</div></div>${section("当前可写入的内容", `<div class="card">${Object.entries(BOOK_SOURCES).map(([id2, label]) => `<p class="tiny muted" style="margin:4px 0">${e(label)} · <b>${b.counts?.[id2] || 0}</b> 条</p>`).join("")}<p class="form-note">写入是可选的：每类数据都能单独开关；人物档案默认只写回、不覆盖手机。</p></div>`)}</div>`;
     }
     const rows = Object.entries(BOOK_SOURCES).map(([id2, label]) => switchRow(label + "（" + (b.counts?.[id2] || 0) + " 条）", id2 === "persona" ? "写进世界书可让正文更容易提到 ta 的性格与经历；世界书里改了会作为“世界书同步”资料回到人物页" : "条目名以「" + (b.prefix || "【小手机】") + "」开头，关键词自动带人物名与日期", "book-src", !!(b.counts?.sources?.[id2] ?? true) && (studio.cfg?.sources?.[id2] !== false), id2)).join("");
     const st = b.stats;
-    return `<div class="pad">
+    return `<div class="pad">${manage}
       <div class="card book-card"><div class="row-top"><h3>${e(b.name)}</h3><span>${tag(b.scope === "chat" ? "仅本聊天" : "整张角色卡共用", "gold")} ${tag(b.bound ? "已绑定" : "未绑定", b.bound ? "" : "rose")}</span></div>
         <p class="tiny muted">可写条目 ${b.counts?.total || 0} 条 · 上次 ${e(clock(b.lastSyncAt))}${b.phase === "syncing" ? " · 正在同步…" : ""}</p>
         ${st ? `<p class="tiny muted">上次结果：新增 ${st.created} · 更新 ${st.updated} · 取回 ${st.pulled} · 删除 ${st.deleted}${st.conflicts ? " · 冲突 " + st.conflicts : ""}${st.skipped ? " · 跳过 " + st.skipped : ""}</p>` : ""}
         ${b.lastError ? hint(b.lastError, true) : ""}
-        ${b.confirm ? `<div class="hint warning">世界书里有 ${b.confirm.count} 条手机写入的条目被删除或整本被清空。要让手机跟着清空对应的辅助记录（不会删除日记与记忆本身），还是以手机数据重建世界书？</div><div class="buttons">${button("按世界书删掉对应条目", "book-accept-delete", "", "danger")}${button("以手机数据重建", "book-rebuild", "", "primary")}</div>` : ""}
+        ${b.confirm ? `<div class="hint warning">有 ${b.confirm.count} 条工坊记录的手机来源已移除、关闭或超出同步范围。是否删除这些远端工坊条目？手机原始记录不会被删除。</div><div class="buttons">${button("确认清理远端工坊条目", "book-accept-delete", "", "danger")}${button("以手机数据重建", "book-rebuild", "", "primary")}</div>` : ""}
         <div class="buttons">${button(icon("shuffle", 14) + " 立即同步", "book-sync", "", "primary")}${button("重新绑定", "book-rebind")}${button("以手机重建", "book-rebuild")}<button type="button" class="btn" data-action="book-preview">导出条目预览</button>${button("停止同步", "book-unlink")}</div>
         ${switchRow("自动同步", "手机数据变了就写进世界书；世界书里改了会取回手机", "book-autosync", b.autoSync)}
       </div>
       ${section("要写进世界书的数据", `<div class="card">${rows}</div>`)}
-      ${section("写入细节", `<div class="card"><p class="tiny muted">条目前缀：${e(b.prefix)} · 条目上限：${b.maxEntries} · 世界书改动取回手机：${b.pullBack ? "开" : "关"} · 人物档案常驻：${b.constantPersona ? "开" : "关"}</p><div class="buttons">${button("修改这些选项", "book-options")}${button("清理已停用来源的条目", "book-clean-orphans")}<button type="button" class="btn" data-action="book-preview">导出条目预览</button></div><p class="form-note">条目超过 8000 字会自动跳过并计数。删除保护：世界书里一次性少掉太多条目时会先暂停，等你在上方确认。</p></div>`)}
+      ${section("写入细节", `<div class="card"><p class="tiny muted">条目前缀：${e(b.prefix)} · 条目上限：${b.maxEntries} · 世界书改动取回手机：${b.pullBack ? "开" : "关"} · 人物档案常驻：${b.constantPersona ? "开" : "关"}</p><div class="buttons">${button("修改这些选项", "book-options")}${button("清理已停用来源的条目", "book-clean-orphans")}<button type="button" class="btn" data-action="book-preview">导出条目预览</button></div><p class="form-note">单条内容最多写出 8000 字（超出部分截断，原手机资料保留）。删除保护：世界书里一次性少掉太多条目时会先暂停，等你在上方确认。</p></div>`)}
       ${hint("世界书是最稳的“跨模型记忆”：绑定到角色卡后，正文模型会按酒馆的触发规则读到这些条目；不需要时逐类关掉即可。")}
     </div>`;
   }
@@ -12393,7 +12438,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
   }
   function soulRow(ui, row) {
     const soul = ui.engine.soul, n = soulEntryCount(row);
-    return `<div class="card"><div style="display:flex;align-items:center;gap:10px"><b>${e(row.name)}</b>${row.aliases?.length ? tag(row.aliases.join(" / "), "gold") : ""}${tag(n + " 条")}${row.updatedAt ? tag("更新于 " + autoAgo(row.updatedAt)) : ""}</div><div class="buttons">${button("档案", "go", "soulChar", "primary")}${button("更新档案", "soul-analyze", row.name)}${button("精编", "soul-condense", row.name)}${button("删除", "soul-char-del", row.name, "danger")}</div></div>`;
+    return `<div class="card"><div style="display:flex;align-items:center;gap:10px"><b>${e(row.name)}</b>${row.aliases?.length ? tag(row.aliases.join(" / "), "gold") : ""}${tag(n + " 条")}${row.updatedAt ? tag("更新于 " + autoAgo(row.updatedAt)) : ""}</div><div class="buttons">${button("档案", "review-soul-open", row.name, "primary")}${button("更新档案", "soul-analyze", row.name)}${button("精编", "soul-condense", row.name)}${button("删除", "soul-char-del", row.name, "danger")}</div></div>`;
   }
   function soulView(ui) {
     if (!ui.data) return empty("先打开角色聊天");
@@ -12402,11 +12447,11 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
     const history = [...(v.history || [])].reverse().slice(0, 5);
     const logs = [...(v.log || [])].reverse().slice(0, 10);
     const head = `<div class="card"><h3 style="margin:0 0 6px">灵魂链接</h3><p class="tiny muted">档案按「聊天」保存在手机存档里（随备份一起走）。每个人各自独立调用一次模型，最多并发 ${v.cfg.concurrency} 个、单个 ${Math.round(v.cfg.timeoutMs / 1000)} 秒超时；每次只把最近 ${v.cfg.contextMessages} 条正文和 ta 自己的档案发给模型。</p>${switchRow("启用灵魂链接", "关闭后不调用、不注入，档案仍保留在存档里", "soul-toggle", v.enabled)}${info.enabled ? `<div class="buttons">${button("更新全部档案", "soul-analyze-all", "", "primary")}${button("推演本轮角色", "soul-roleplay")}${button("清除推演注入", "soul-roleplay-clear")}${button("从通讯录登记角色", "soul-import-contacts")}</div><div class="buttons">${button(icon("download", 14) + " 导出名单", "soul-export")}${button(icon("upload", 14) + " 导入名单", "soul-import")}</div><p class="form-note">导出为通用名单 JSON（app / kind / roster，字段与旧版 SoulLink 名单一致），方便你从以前的文件迁入；导入同样兼容 roster / archives / characters 结构。</p>` : ""}</div>`;
-    if (!info.enabled) return `<div class="pad">${head}${hint("启用后，先在下面的名单里登记角色（可从通讯录一键登记）。")}</div>`;
+    if (!info.enabled) return `<div class="pad">${head}${button("预览 / 批量删除已有档案", "review-soul-delete")}${hint("启用后可生成档案；查看和删除已有档案不需要启用模型。")}</div>`;
     const cfgCard = `<form data-form="soul"><div class="card"><h3 style="margin:0 0 6px">调用与推演参数</h3><div class="two-cols">${field("并发上限 1—8", "concurrency", v.cfg.concurrency, { type: "number" })}${field("单个请求超时（秒）5—180", "timeoutSec", Math.round(v.cfg.timeoutMs / 1000), { type: "number" })}${field("上下文条数 1—20", "contextMessages", v.cfg.contextMessages, { type: "number" })}${field("独白字数上限 80—800", "maxChars", v.cfg.maxChars, { type: "number" })}${field("注入深度 0—10", "injectDepth", v.cfg.injectDepth, { type: "number" })}${field("每节条目上限 10—60", "maxEntriesPerSection", v.cfg.maxEntriesPerSection, { type: "number" })}</div><p class="form-note">“注入深度”= 距离最新一条消息的层数：4 表示插在最后 4 条消息附近，越小越靠后（越容易被模型当成最近上下文）。</p><button type="submit" class="btn primary wide">保存参数</button></div></form>`;
     const autoCard = `<div class="card"><h3 style="margin:0 0 6px">自动维护与推演</h3>${switchRow("自动更新档案", "每次主线新回复结束后，先做预筛，再只更新有变化的角色；计入后台调用预算", "soul-auto-toggle", !!v.auto.enabled)}${switchRow("发送前角色推演", "为在场 / 最近出现的角色并发生成内心独白，注入正文提示（生成结束后自动清除）", "soul-roleplay-toggle", !!v.roleplay.enabled)}<div class="buttons">${button("推演方式：" + ({ off: "关闭", manual: "手动", barrier: "拦截发送按钮" }[v.roleplay?.mode || "manual"]), "soul-mode")}${button("预筛方式：" + (v.auto?.gateMode === "ai" ? "模型预筛" : "本地关键词"), "soul-gate-mode")}</div><p class="form-note">推演方式选「拦截发送按钮」时，点酒馆发送会先等推演完成再放行（最多 ${Math.round(v.cfg.timeoutMs / 1000)} 秒，失败就照常发送）；手机内给角色发消息时也会自动推演。不想被打断就用默认的「手动」。</p></div>`;
     const presetCard = `<div class="card"><h3 style="margin:0 0 6px">提示词预设</h3>${SOUL_PROMPT_KEYS.map((k) => `<div class="buttons" style="align-items:center">${button(SOUL_PROMPT_LABELS[k] + "：" + e(text(v.presets?.[k] || SOUL_DEFAULT_PROMPTS[k], 24)) + "…", "soul-preset", k)}${v.presets?.[k] !== void 0 ? button("恢复默认", "soul-preset-reset", k) : ""}</div>`).join("")}<div class="buttons">${button("导出提示词", "soul-presets-export")}${button("导入提示词", "soul-presets-import")}</div><p class="form-note">四套提示词可以照自己的口味改；也可以把任意现成提示词粘进来，改完点保存即可。</p></div>`;
-    const listCard = `<div class="card"><h3 style="margin:0 0 6px">角色名单（${rows.length} 人 · ${info.entries} 条）</h3><div class="buttons">${button("手动添加角色", "soul-add-char", "", "primary")}${button("从通讯录登记", "soul-import-contacts")}</div></div>` + (rows.length ? rows.map((r) => soulRow(ui, r)).join("") : empty("名单还是空的", "从通讯录一键登记，或手动添加角色，然后点「更新档案」让模型读正文开始积累。", "heart"));
+    const listCard = `<div class="card"><h3 style="margin:0 0 6px">角色名单（${rows.length} 人 · ${info.entries} 条）</h3><div class="buttons">${button("手动添加角色", "soul-add-char", "", "primary")}${button("批量删除角色", "review-soul-delete", "", "danger")}${button("世界书联动 / 条目预览", "go", "book")}${button("从通讯录登记", "soul-import-contacts")}</div></div>` + (rows.length ? rows.map((r) => soulRow(ui, r)).join("") : empty("名单还是空的", "从通讯录一键登记，或手动添加角色，然后点「更新档案」让模型读正文开始积累。", "heart"));
     const histCard = history.length || logs.length ? `<div class="card"><h3 style="margin:0 0 6px">最近推演与日志</h3>${history.map((h) => `<p class="tiny muted" style="margin:6px 0"><b>#${(h.floor ?? 0) + 1}楼</b> · ${e(autoAgo(h.ts))} · ${e((h.actors || []).map((a2) => a2.name).join("、") || "无")}${h.ok === false ? " · 注入未就绪" : ""}</p>${(h.actors || []).map((a2) => `<details class="details"><summary>${e(a2.name)} 的内心独白</summary><p>${e(a2.text)}</p></details>`).join("")}`).join("")}${logs.map((l) => `<p class="tiny muted" style="margin:4px 0">${e(autoAgo(l.ts))} · ${e(l.text)}</p>`).join("")}<div class="buttons">${button("清空日志", "soul-log-clear")}</div></div>` : "";
     return `<div class="pad">${head}${cfgCard}${autoCard}${listCard}${presetCard}${histCard}${hint("与「记忆模块 / 记忆世界书」的分工：灵魂链接管的是“这个角色本身是谁、记得什么”，记忆模块管的是“发生过的事、尚未了结的约定”。两者可以同时开，但同一段内容不要两边都注入。")}</div>`;
   }
@@ -12417,7 +12462,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
     const total = soulEntryCount(row);
     const sections = SOUL_SECTIONS.map((k) => {
       const rows = row.sections[k] || [];
-      return `<div class="card"><h3 style="margin:0 0 6px">${e(k)}（${rows.length}）</h3>${rows.length ? rows.map((x) => `<div style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><div style="flex:1"><span class="tiny">${e(x.text)}</span><br><small class="muted">${x.floor >= 0 ? "#" + (x.floor + 1) + "楼 · " : ""}${e({ manual: "手写", ai: "AI", phone: "手机记录", import: "导入", condense: "精编" }[x.source] || x.source || "手工")} · ${e(autoAgo(x.ts))}</small></div>${button("删", "soul-entry-del", name + "|" + k + "|" + x.id, "danger")}</div>`).join("") : `<p class="tiny muted">还没有条目。</p>`}</div>`;
+      return `<div class="card"><h3 style="margin:0 0 6px">${e(k)}（${rows.length}）</h3>${rows.length ? rows.map((x) => `<div style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><div style="flex:1"><span class="tiny">${e(x.text)}</span><br><small class="muted">${x.floor >= 0 ? "#" + (x.floor + 1) + "楼 · " : ""}${e({ manual: "手写", ai: "AI", phone: "手机记录", import: "导入", condense: "精编" }[x.source] || x.source || "手工")} · ${e(autoAgo(x.ts))}</small></div>${button("删", "soul-entry-del", JSON.stringify([name, k, x.id]), "danger")}</div>`).join("") : `<p class="tiny muted">还没有条目。</p>`}</div>`;
     }).join("");
     return `<div class="pad"><div class="card"><h3 style="margin:0 0 6px">${e(row.name)}</h3><p class="tiny muted">${row.aliases?.length ? "别名：" + e(row.aliases.join("、")) + " · " : ""}共 ${total} 条 · ${row.updatedAt ? "最近更新 " + e(autoAgo(row.updatedAt)) : "尚未更新"}</p><div class="buttons">${button("更新档案", "soul-analyze", name, "primary")}${button("精编", "soul-condense", name)}${button("合入手机记录", "soul-pull-phone", name)}${button("删除角色", "soul-char-del", name, "danger")}${button("返回名单", "go", "soul")}</div></div><form data-form="soul-entry"><input type="hidden" name="name" value="${e(name)}"><div class="card">${select("写到哪一节", "section", SOUL_SECTIONS.map((k) => [k, k]), "记忆")}${field("新增条目（≤600 字）", "text", "", { textarea: true, max: 600, required: true })}<button type="submit" class="btn primary wide">添加条目</button></div></form>${sections}<div class="buttons">${button("把这人的档案写成世界书条目", "book-preview")}${button("返回名单", "go", "soul")}</div></div>`;
   }
@@ -12483,6 +12528,126 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
     return `<div class="pad">${hint("这里显示任务结果与错误，不记录API密钥。记录只保留最近200条诊断；聊天原文不会因此被删。")}${ui.engine.router.lastRequest ? `<div class="card"><h3>最近一次请求</h3><p class="tiny muted">${e(MODULES[ui.engine.router.lastRequest.module] || ui.engine.router.lastRequest.module)} → ${e(ui.engine.router.lastRequest.profile)}<br>${e(ui.engine.router.lastRequest.model)}${ui.engine.router.lastRequest.mock ? "<br>离线模拟，未请求真实模型" : ""}</p></div>` : ""}${logs.length ? tpDeleteBar("logs", logs.length, "运行记录") : ""}${logs.length ? [...logs].reverse().map((l) => `<div class="log-line ${l.level === "warning" ? "warning" : ""}"><b>${e(MODULES[l.module] || "系统")} · ${e(new Date(l.ts).toLocaleTimeString("zh-CN"))}</b><p>${e(l.message)}</p></div>`).join("") : empty("暂时没有运行记录", "完成一次生成后，这里会留下结果。", "file")}</div>`;
   }
 
+  // v2.9.3 — explicit previews, scoped bulk removal, existing-book selection.
+  function reviewAssert(eng, snap) {
+    assert(snap && eng.bridge.same(snap), "聊天或分支已变化，请重新打开预览");
+    const now = eng.bridge.capture();
+    assert(now.owner === snap.owner && (snap.signature === undefined || now.signature === snap.signature), "正文已变化，旧操作未提交");
+  }
+  function reviewBookSig(rows) { return fingerprint(rows.filter(bookStampOf).map(r => [bookStampOf(r).key, bookStampOf(r).kind, bookStampOf(r).hash, r.name, r.content, r.enabled !== false, r.strategy || {}])); }
+  function reviewSoulDelete(s, names) {
+    const v = soulData(s), chosen = new Set(names);
+    for (const name of chosen) delete v.roster[name];
+    v.last.actors = (v.last.actors || []).filter(n => !chosen.has(n));
+    v.history = (v.history || []).map(h => ({ ...h, actors: (h.actors || []).filter(a => !chosen.has(a.name)) }));
+    v.stats.entries = Object.values(v.roster).reduce((n, row) => n + soulEntryCount(row), 0);
+  }
+  async function reviewPick(ui, title, rows, { submit = "确认选择", note = "", checked = [] } = {}) {
+    const snap = ui.engine.bridge.capture(), selected = new Set(checked);
+    let page = 0;
+    while (true) {
+      const slice = rows.slice(page * 20, page * 20 + 20);
+      const body = hint(note) + `<p>共 ${rows.length} 条 · 第 ${page + 1}/${Math.max(1, Math.ceil(rows.length / 20))} 页 · 已选 ${selected.size} 条</p>` + pickTools() + filterBox("筛选本页条目…") + `<div class="pick-list">` + slice.map(r => `<div class="filter-row" data-text="${e(r.name)}"><label class="checkbox-label"><input type="checkbox" name="members" value="${e(r.key)}" ${selected.has(r.key) ? "checked" : ""}><span>${e(r.name)}${r.note ? `<small>${e(r.note)}</small>` : ""}</span></label><details class="details"><summary>展开完整条目预览</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${e(r.content || "（空条目）")}</pre></details></div>`).join("") + `</div>`;
+      const result = await ui.dialog(title, `<form data-form="modal" data-review-picker="1">${body}</form>`, { choices: [["apply", submit, "primary"], ...(page > 0 ? [["prev", "上一页", ""]] : []), ...((page + 1) * 20 < rows.length ? [["next", "下一页", ""]] : []), ["cancel", "取消", ""]] });
+      reviewAssert(ui.engine, snap);
+      if (!result || result.choice === "cancel") return null;
+      const valid = new Set(slice.map(r => r.key));
+      for (const r of slice) selected.delete(r.key);
+      for (const key of result.members || []) if (valid.has(key)) selected.add(key);
+      if (result.choice === "next") { page++; continue; }
+      if (result.choice === "prev") { page--; continue; }
+      return rows.filter(r => selected.has(r.key));
+    }
+  }
+  BookStudio.prototype.removeSelected = async function(keys, { snapshot, remoteSig } = {}) {
+    assert(!this.running, "工坊正在同步，请稍后重试");
+    const snap = snapshot || this.bridge.capture(), cfg = this.cfg, book = cfg.name, chosen = new Set(keys);
+    assert(chosen.size && chosen.size <= 2000 && [...chosen].every(k => typeof k === "string" && k.length <= 200), "请选择有效条目");
+    reviewAssert(this.eng, snap);
+    this.running = true;
+    try {
+      if (cfg.linked) {
+        const current = await this.bridge.wbRead(book); reviewAssert(this.eng, snap);
+        assert(remoteSig === undefined || reviewBookSig(current) === remoteSig, "世界书在预览后发生变化，请重新核对");
+      }
+      await this.eng.repo.mutate(s => {
+        assert(s.bookSync.name === book, "连接的世界书已变化");
+        const list = [...new Set([...(s.bookSync.excludedKeys || []), ...chosen])];
+        assert(list.length <= 2000, "排除清单已达2000条，请先整理");
+        s.bookSync.excludedKeys = list;
+      }, { snapshot: snap, guard: () => { reviewAssert(this.eng, snap); return true; }, label: "批量移除工坊同步条目（保留手机原始数据）" });
+      let removed = 0;
+      if (cfg.linked) await this.bridge.wbUpdate(book, fresh => {
+        reviewAssert(this.eng, snap); assert(this.cfg.name === book, "世界书连接已变化");
+        assert(remoteSig === undefined || reviewBookSig(fresh) === remoteSig, "世界书被并行修改，已保留排除标记；请刷新后重试删除");
+        return fresh.filter(row => { const st = bookStampOf(row); const drop = st && chosen.has(String(st.key)); if (drop) removed++; return !drop; });
+      });
+      this.lastHash = ""; return { removed, excluded: chosen.size };
+    } finally { this.running = false; this.eng.emit(); }
+  };
+  async function reviewAction(ui, action, value) {
+    const eng = ui.engine, snap = eng.bridge.capture();
+    const check = () => reviewAssert(eng, snap);
+    if (action === "review-soul-open") { ui.go("soulChar", value); return; }
+    if (action === "review-soul-delete" || action === "soul-char-del") {
+      const before = fingerprint(soulData(ui.data).roster);
+      const rows = Object.values(soulData(ui.data).roster).filter(r => action !== "soul-char-del" || r.name === value).map(r => ({ key: r.name, name: r.name, content: soulRender(soulData(ui.data), r.name) }));
+      const picked = await reviewPick(ui, "批量删除灵魂链接角色", rows, { submit: "删除选中档案", checked: action === "soul-char-del" ? [value] : [], note: "只删除手机灵魂档案及其推演历史，不删通讯录或记忆。若工坊启用灵魂档案同步，后续同步也会移除已纳入当前同步的对应工坊条目（大量移除需确认）。" });
+      if (!picked?.length) return;
+      if (!await ui.confirm("确认删除 " + picked.length + " 位角色的灵魂档案？", "此操作不可单独撤销，建议先导出名单。", "删除")) return;
+      check();
+      await eng.repo.mutate(s => { assert(fingerprint(soulData(s).roster) === before, "档案在预览后变化，请重新选择"); reviewSoulDelete(s, picked.map(r => r.key)); }, { snapshot: snap, label: "批量删除灵魂档案" });
+      eng.soul.clearRoleplay(); eng.bookStudio.notePhoneChange(); ui.go("soul"); return;
+    }
+    if (["review-book-manage", "review-book-restore"].includes(action)) {
+      const bs = eng.bookStudio, restore = action === "review-book-restore";
+      const pick = await ui.dialog(restore ? "恢复已排除的工坊条目" : "预览与批量移除工坊条目", select("数据类型", "kind", [["all", "全部类型"], ...Object.entries(BOOK_SOURCES)], "all"), { submit: "查看条目" });
+      check(); if (!pick) return;
+      const stateSig = fingerprint([ui.data.bookSync, bs.recordsFor(ui.data, snap, { all: true })]);
+      let remote = [];
+      if (bs.cfg.linked) { remote = await eng.bridge.wbRead(bs.cfg.name); check(); }
+      const records = bs.recordsFor(ui.data, snap, { all: true });
+      const known = new Set(records.map(r => r.key));
+      for (const r of remote) { const st = bookStampOf(r); if (st && !known.has(String(st.key))) { known.add(String(st.key)); records.push({ key: String(st.key), name: r.name || st.key, src: st.kind, content: r.content }); } }
+      const excluded = new Set(bs.cfg.excludedKeys || []);
+      const rows = records.filter(r => (pick.kind === "all" || r.src === pick.kind) && (!restore || excluded.has(r.key))).map(r => ({ ...r, note: excluded.has(r.key) ? "已排除，不会自动重建" : bs.cfg.sources[r.src] === false ? "此数据来源未启用" : "等待/参与同步" }));
+      const selected = await reviewPick(ui, restore ? "选择要恢复同步的条目" : "条目预览 / 批量移除", rows, { submit: restore ? "恢复选中同步" : "移除选中条目", note: "可逐条展开正文；全选仅作用于当前页，翻页保留选择。移除仅删除本工坊写出的条目并阻止自动重建，不删除联系人、日记等手机原始数据，也不动第三方条目。" });
+      if (!selected?.length) return;
+      if (!await ui.confirm(restore ? "恢复同步？" : "移除 " + selected.length + " 个工坊条目？", restore ? "下次同步可重新写入；对应来源需保持开启。" : "保留手机原数据；远端删除失败时仍保留排除标记，可刷新后重试。", "确认")) return;
+      check(); assert(stateSig === fingerprint([ui.data.bookSync, bs.recordsFor(ui.data, snap, { all: true })]), "手机条目在预览后变化，请重新核对");
+      if (restore) {
+        const keys = new Set(selected.map(r => r.key));
+        await eng.repo.mutate(s => { s.bookSync.excludedKeys = (s.bookSync.excludedKeys || []).filter(k => !keys.has(k)); }, { snapshot: snap, label: "恢复工坊条目同步" });
+        bs.notePhoneChange();
+      } else await bs.removeSelected(selected.map(r => r.key), { snapshot: snap, remoteSig: reviewBookSig(remote) });
+      ui.render(); return;
+    }
+    if (action === "review-memory-manage") {
+      const before = fingerprint([ui.data.memories, ui.data.memoryBook]);
+      const rows = ui.data.memories.filter(notBaibai).map(m => ({key:m.id, name:memoryTitle(m), content:m.text, note:m.wb ? "已关联世界书" : "手机本地记忆"}));
+      const picked = await reviewPick(ui, "记忆条目预览 / 批量删除", rows, {submit:"删除所选记忆", note:"这里会删除手机记忆本身；已连接的对应记忆世界书条目将在同步时删除。工坊条目、柏宝书镜像和第三方书本体不在此列表。请先备份。"});
+      if (!picked?.length || !await ui.confirm("确认删除 " + picked.length + " 条记忆？", "不同于工坊的排除写出，此操作会删除手机中的所选记忆；已关联的远端条目将在同步时删除。", "删除")) return;
+      const guard = () => { check(); assert(before === fingerprint([eng.repo.data.memories, eng.repo.data.memoryBook]), "记忆或同步配置已变化，请重新选择"); return true; };
+      await eng.repo.mutate(s => { for (const row of picked) eng.memoryBook.removeLinked(s, row.key); }, {snapshot:snap, guard, label:"预览后批量删除记忆"});
+      eng.memoryBook.notePhoneChange(); ui.notify("已删除选中手机记忆；关联的远端条目将在同步时删除。"); ui.render(); return;
+    }
+    if (action === "review-memory-connect" || action === "review-book-connect") {
+      const memory = action === "review-memory-connect", service = memory ? eng.memoryBook : eng.bookStudio;
+      assert(service.supported(), "未检测到酒馆助手世界书接口");
+      assert(!service.running && !service.cfg?.linked, "请先停止当前同步再更换世界书");
+      const names = await eng.bridge.wbNames(); check(); assert(names.length, "当前没有世界书，可先创建一本");
+      const preferred = value || (ui.data.bookSync?.linked ? ui.data.bookSync.name : names[0]);
+      const result = await ui.dialog("读取已有世界书并同步", select("选择已有世界书", "name", names.map(n => [n, n]), names.includes(preferred) ? preferred : names[0]) + select("绑定范围", "scope", [["card", "当前角色卡"], ["chat", "仅当前聊天"]], "card") + hint(memory ? "可直接选择工坊已创建的书。工坊人物/灵魂/日记等条目仍由工坊管理，不会当成记忆重复导入。" : "先预览现有条目，再决定连接；其他来源的条目不会被工坊改写。"), { submit: "读取并预览" });
+      check(); if (!result) return;
+      const remote = await eng.bridge.wbRead(result.name); check();
+      const rows = remote.filter(r => !memory || !bookStampOf(r)).filter(r => (r.uid ?? r.id) !== undefined).map((r, i) => ({ key: String(i), uid: r.uid ?? r.id, name: r.name || r.comment || "未命名条目", content: r.content || "" }));
+      const selected = await reviewPick(ui, memory ? "选择要导入的记忆条目" : "现有世界书条目预览", rows, { submit: memory ? "连接并导入选中条目" : "确认连接", note: memory ? "只导入选中条目；其他条目保留原样，不删除；以后新增的未选条目也不会自动导入，如需增加请停止同步后重新选择。工坊条目不在本记忆列表中，可到工坊预览。手机已有记忆会同步写入此书。" : "这里只预览，勾选不会删除或导入第三方条目。连接后将按当前来源设置写出手机数据。" });
+      if (selected === null) return;
+      check(); const fresh = await eng.bridge.wbRead(result.name); check(); assert(fingerprint(fresh) === fingerprint(remote), "世界书在预览后变化，请重新读取");
+      await service.link({ name: result.name, scope: result.scope, acceptExisting: true, ...(memory ? { importUids: selected.map(r => r.uid) } : {}) });
+      ui.notify("已连接已有世界书；未新建重复书。"); ui.render(); return;
+    }
+  }
   // src/ui/renderer.js
   var apps = [["studio", "剧情中心", "compass", "sand"], ["visual", "视觉档案", "image", "blue"], ["messages", "消息", "chat", "green"], ["feed", "朋友圈", "feed", "rose"], ["agenda", "日历", "calendar", "blue"], ["contacts", "通讯录", "people", ""], ["diary", "日记", "book", "sand"], ["notes", "备忘", "note", "rose"], ["memories", "记忆", "memory", ""], ["life", "生活清单", "coffee", "green"], ["places", "地点", "place", "blue"], ["album", "相册", "image", ""], ["book", "世界书", "book", "sand"], ["soul", "灵魂链接", "heart", "rose"], ["settings", "设置", "settings", ""]];
   var names2 = { home: "月夜来信", messages: "消息", chat: "对话", contacts: "通讯录", contact: "人物与过往", feed: "朋友的日常", planner: "剧情规划", diag: "存档与规划状态", plan: "方向详情", agenda: "日历与约定", memories: "共同的记忆", life: "慢慢生活", notes: "随手记", diary: "日记", bag: "随身物品", album: "相册", places: "生活地图", settings: "设置", api: "API方案与模块", apiEditor: "编辑API方案", automation: "后台与主动来信", ms: "记忆工作台", soul: "灵魂链接", soulChar: "灵魂链接 · 角色档案", book: "世界书工坊", backup: "备份与恢复", logs: "运行记录", outbox: "待发箱" };
@@ -13052,7 +13217,8 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
         return;
       }
       if (action === "modal-choice") {
-        this.finishModal({ choice: id2 });
+        const picker = this.shadow.getElementById("modals").querySelector("form[data-review-picker]");
+        this.finishModal({ ...(picker ? this.formValues(picker) : {}), choice: id2 });
         return;
       }
       if (action === "dismiss-toast") {

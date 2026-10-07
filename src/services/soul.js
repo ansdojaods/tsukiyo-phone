@@ -56,8 +56,8 @@
   }
   function soulEnsure(v, name, { aliases = [], source = "manual" } = {}) {
     const key = text(name, 40);
-    assert(key, "角色名不能为空");
-    if (!v.roster[key]) v.roster[key] = { name: key, aliases: [], sections: Object.fromEntries(SOUL_SECTIONS.map((k) => [k, []])), enabled: true, source, updatedAt: 0, floor: -1 };
+    assert(key && !["__proto__", "prototype", "constructor"].includes(key), "角色名为空或为保留名称");
+    if (!Object.prototype.hasOwnProperty.call(v.roster, key)) v.roster[key] = { name: key, aliases: [], sections: Object.fromEntries(SOUL_SECTIONS.map((k) => [k, []])), enabled: true, source, updatedAt: 0, floor: -1 };
     const row = v.roster[key];
     for (const a2 of aliases) if (a2 && !row.aliases.includes(text(a2, 40))) row.aliases.push(text(a2, 40));
     for (const k of SOUL_SECTIONS) if (!Array.isArray(row.sections[k])) row.sections[k] = [];
@@ -174,7 +174,7 @@
     assert(isObject(v) && typeof v.enabled === "boolean", "灵魂链接配置错误");
     assert(isObject(v.roster) && Object.keys(v.roster).length <= 200, "灵魂链接角色过多（上限 200）");
     for (const [name, row] of Object.entries(v.roster)) {
-      assert(isObject(row) && row.name === name && typeof row.name === "string" && row.name.length <= 40, "灵魂链接角色名错误");
+      assert(!["__proto__", "constructor", "prototype"].includes(name) && isObject(row) && row.name === name && typeof row.name === "string" && row.name.length <= 40, "灵魂链接角色名错误");
       assert(Array.isArray(row.aliases) && row.aliases.length <= 12, "灵魂链接别名过多");
       for (const key of SOUL_SECTIONS) {
         const rows = row.sections?.[key];
@@ -306,20 +306,22 @@
       const others = names.filter((n) => !hit.includes(n));
       return [...hit, ...others].slice(0, Math.max(1, limit));
     }
-    async ask(system, payload, { timeoutMs } = {}) {
-      const snap = this.eng.repo.snapshot;
+    async ask(system, payload, { timeoutMs, origin } = {}) {
+      const snap = origin || this.eng.repo.snapshot;
+      reviewAssert(this.eng, snap);
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort("timeout"), Math.max(5000, timeoutMs || this.cfg().timeoutMs));
       try {
         const raw = await this.eng.router.call("soul", { system, user: JSON.stringify(payload) }, { signal: ctrl.signal });
-        assert(this.eng.bridge.same(snap), "已切换聊天，结果未写入");
+        reviewAssert(this.eng, snap);
         return raw;
       } finally {
         clearTimeout(timer);
       }
     }
-    async mutate(fn, label) {
-      const snap = this.eng.repo.snapshot;
+    async mutate(fn, label, origin = null) {
+      const snap = origin || this.eng.repo.snapshot;
+      reviewAssert(this.eng, snap);
       return this.eng.repo.mutate(fn, { label, snapshot: snap });
     }
     /** 档案更新：单角色。includeBook 时额外读取该角色相关的世界书条目作为材料。 */
@@ -328,6 +330,7 @@
       assert(this.enabled(), "灵魂链接已关闭（或在模块开关里停用）");
       assert(soulData(s)?.roster?.[name], "角色不在灵魂链接名单里");
       const snap = this.eng.repo.snapshot;
+      const rowSig = fingerprint(soulData(s).roster[name]);
       const before = soulEntryCount(soulData(s).roster[name]);
       const payload = {
         角色: name,
@@ -341,10 +344,11 @@
         世界书片段: await this.bookSnippets(name).catch(() => []),
         楼层: snap.floor
       };
-      const raw = await this.ask(this.prompt("analyze"), payload);
+      const raw = await this.ask(this.prompt("analyze"), payload, { origin: snap });
       const delta = soulJson(raw);
       let stats = { added: 0, skipped: 0 };
       await this.mutate((d) => {
+        assert(soulData(d).roster[name] && fingerprint(soulData(d).roster[name]) === rowSig, "角色已删除或档案已修改，旧结果未写入");
         stats = soulMerge(soulData(d), name, delta, { floor: snap.floor, source: "ai" });
         const v = soulData(d);
         v.stats.analyzed++;
@@ -354,7 +358,7 @@
         v.last.floor = snap.floor;
         v.last.sig = fingerprint([name, snap.owner, snap.floor]);
         d.soul.log = [...v.log, { ts: Date.now(), kind: "info", text: name + "：档案 +" + stats.added + " 条" }].slice(-200);
-      }, "灵魂链接 · 档案更新");
+      }, "灵魂链接 · 档案更新", snap);
       this.log(name + "：新增 " + stats.added + " 条" + (stats.skipped ? "，跳过重复 " + stats.skipped + " 条" : ""), "ok");
       this.eng.bookStudio?.notePhoneChange?.();
       return { name, added: stats.added, skipped: stats.skipped, before, after: before + stats.added };
@@ -420,13 +424,15 @@
       assert(this.enabled(), "灵魂链接已关闭");
       const s = this.data(), row = soulData(s).roster[name];
       assert(row, "角色不在名单里");
+      const origin = this.eng.repo.snapshot, rowSig = fingerprint(row);
       const before = soulEntryCount(row);
       const payload = { 角色: name, 档案: SOUL_SECTIONS.reduce((o, k) => ({ ...o, [k]: (row.sections[k] || []).map((x) => x.text) }), {}) };
-      const raw = await this.ask(this.prompt("condense"), payload);
+      const raw = await this.ask(this.prompt("condense"), payload, { origin });
       const value = soulJson(raw);
       let after = 0;
       await this.mutate((d) => {
         const v = soulData(d), target = v.roster[name];
+        assert(target && fingerprint(target) === rowSig, "角色已删除或档案已修改，旧精编结果未写入");
         for (const key of SOUL_SECTIONS) {
           const rows = Array.isArray(value[key]) ? value[key] : null;
           if (!rows) continue;
@@ -437,7 +443,7 @@
         after = soulEntryCount(target);
         v.stats.runs++;
         v.stats.entries = Object.values(v.roster).reduce((n, r) => n + soulEntryCount(r), 0);
-      }, "灵魂链接 · 档案精编");
+      }, "灵魂链接 · 档案精编", origin);
       this.log(name + "：精编 " + before + " → " + after + " 条", "ok");
       return { name, before, after };
     }
@@ -449,6 +455,7 @@
       const target = snap || this.eng.repo.snapshot;
       const list = (names?.length ? names : this.candidates(target, s, roles.maxActors)).filter((n) => soulData(s).roster[n]).slice(0, Math.max(1, roles.maxActors));
       assert(list.length, "名单里还没有可推演的角色");
+      const rosterSig = fingerprint(list.map(n => soulData(s).roster[n]));
       if (this.busy) throw Error("灵魂链接已有任务在执行（稍后再试）");
       this.busy = true;
       this.phase = "roleplay";
@@ -463,7 +470,7 @@
             档案: SOUL_SECTIONS.reduce((o, k) => ({ ...o, [k]: (row.sections[k] || []).map((x) => x.text).slice(-20) }), {}),
             最近消息: ctx, 字数上限: cfg.maxChars, 楼层: target.floor
           };
-          const raw = await this.ask(this.prompt("roleplay"), payload);
+          const raw = await this.ask(this.prompt("roleplay"), payload, { origin: target });
           const value = soulJson(raw);
           return { name, text: text(value.text || value.独白 || "", Math.max(80, cfg.maxChars)) };
         });
@@ -472,6 +479,8 @@
           const first = results.find((r) => !r.ok);
           throw Error(first ? "推演失败：" + first.error : "推演没有返回内容");
         }
+        reviewAssert(this.eng, target);
+        assert(rosterSig === fingerprint(list.map(n => soulData(this.data()).roster[n])), "推演期间角色已删除或档案已修改，不注入旧结果");
         const inject = this.renderInjection(actors, target);
         const ok = this.eng.bridge.setPrompt(inject, SOUL_KEYS.roleplay, cfg.injectDepth);
         await this.mutate((d) => {
@@ -482,7 +491,7 @@
           v.last.actors = actors.map((x) => x.name);
           v.history = [...v.history, { ts: Date.now(), floor: target.floor, actors, ok }].slice(-20);
           d.soul.log = [...v.log, { ts: Date.now(), kind: "info", text: "推演：" + actors.map((x) => x.name).join("、") + (ok ? "" : "（注入接口未就绪）") }].slice(-200);
-        }, "灵魂链接 · 角色推演");
+        }, "灵魂链接 · 角色推演", target);
         this.log("推演完成：" + actors.map((x) => x.name).join("、") + (ok ? "，已注入正文" : "，但注入接口未就绪"), ok ? "ok" : "warning");
         return { actors, injected: ok, text: inject };
       } finally {

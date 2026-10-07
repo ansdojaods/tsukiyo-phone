@@ -122,7 +122,7 @@
       }
       const saved = this.saved()[this.cardKey(snap)];
       if (!saved || saved.scope !== "card") return;
-      this.link({ name: saved.name, scope: "card", acceptExisting: true }).catch(() => {
+      this.link({ name: saved.name, scope: "card", acceptExisting: true, importUids: saved.importUids ?? null }).catch(() => {
       });
     }
     /** 引擎在手机数据变化 / 世界书事件时调用：只有真正相关的变化才会触发同步 */
@@ -148,20 +148,23 @@
         if (this.bookSig(rows) !== this.lastBookSig) this.schedule(500);
       }, () => this.schedule(500));
     }
-    async _mutate(fn, label) {
-      const snap = this.bridge.capture();
+    async _mutate(fn, label, origin = null) {
+      const snap = origin || this.bridge.capture();
+      reviewAssert(this.eng, snap);
       return this.eng.repo.mutate(fn, { label, snapshot: snap });
     }
     /** 创建（或连接已有）世界书，并绑定到角色卡/聊天，然后做第一次同步。 */
-    async link({ name = "", scope = "card", acceptExisting = false } = {}) {
+    async link({ name = "", scope = "card", acceptExisting = false, importUids = null } = {}) {
       assert(this.supported(), "需要酒馆助手的世界书接口（getWorldbook / createWorldbook / updateWorldbookWith）；请确认已启用酒馆助手");
       const snap = this.bridge.capture();
       const book = cleanBookName(name) || defaultBookName(snap, scope);
       this.publish({ phase: "linking", note: "正在创建 / 连接世界书…" });
       try {
         const names3 = await this.bridge.wbNames();
+        reviewAssert(this.eng, snap);
         if (names3.includes(book)) {
           const rows = await this.bridge.wbRead(book);
+          reviewAssert(this.eng, snap);
           if (rows.length && !acceptExisting) {
             const err = Error("世界书「" + book + "」已经存在，里面有 " + rows.length + " 个条目。");
             err.code = "BOOK_EXISTS";
@@ -170,17 +173,20 @@
             throw err;
           }
         } else assert(await this.bridge.wbCreate(book, []) || (await this.bridge.wbNames()).includes(book), "创建世界书失败");
+        reviewAssert(this.eng, snap);
         let bindError = "";
         const bound = await this.bridge.wbBind(book, scope).then(() => true, (e2) => {
           bindError = redactError(e2, []);
           return false;
         });
         await this._mutate((s) => {
+          if (importUids !== null) { s.memoryBook.selectionBook = book; s.memoryBook.importUids = [...new Set(importUids)]; }
+          else if (s.memoryBook.selectionBook !== book) { delete s.memoryBook.selectionBook; delete s.memoryBook.importUids; }
           Object.assign(s.memoryBook, { name: book, scope, linked: true, bound, autoSync: true, lastError: bound ? "" : "世界书已创建，但没能绑定：" + bindError, pendingDelete: [] });
           log(s, "ok", "记忆世界书已连接：" + book, "memory");
-        }, "连接记忆世界书");
+        }, "连接记忆世界书", snap);
         this.lastHash = "";
-        this.remember(snap, scope === "card" ? { name: book, scope } : null);
+        this.remember(snap, scope === "card" ? { name: book, scope, importUids: this.cfg.selectionBook === book ? this.cfg.importUids : null } : null);
         return await this.sync({ reason: "link", force: true });
       } finally {
         this.publish({ phase: "idle" });
@@ -254,13 +260,17 @@
         this.schedule(4e3);
         return null;
       }
+      const runSnap = this.bridge.capture();
       this.running = true;
       this.publish({ phase: "syncing" });
       let result = null, agg = null, firstPlan = null;
       try {
         for (let round = 0; round < 3; round++) {
+          reviewAssert(this.eng, runSnap);
           const cfg = this.cfg, book = cfg.name, data = this.eng.repo.data;
           const snap = this.bridge.capture();
+          const inputSig = fingerprint([data.memoryBook, data.memories]);
+          const guard = () => { reviewAssert(this.eng, runSnap); assert(inputSig === fingerprint([this.eng.repo.data.memoryBook, this.eng.repo.data.memories]), "记忆或同步配置已变化，请重新同步"); return true; };
           const names3 = await this.bridge.wbNames();
           if (!names3.includes(book)) {
             const err = Error("世界书「" + book + "」不存在（可能在酒馆里被删除了）");
@@ -268,14 +278,16 @@
             throw err;
           }
           const entries = await this.bridge.wbRead(book);
+          guard();
           const handledRemoved = new Set(cfg.pendingDelete.map((r) => r.id));
-          const opts = () => ({ removed: cfg.pendingDelete, newId: () => id("memory") });
+          const opts = () => ({ removed: cfg.pendingDelete, allowedImportUids: cfg.selectionBook === book ? cfg.importUids : null, newId: () => id("memory") });
           let plan = planMemorySync(data.memories.filter(notBaibai), entries, opts());
           const needsWrite = plan.create.length || plan.update.length || plan.stamp.length || plan.deleteWB.length || plan.import.some((e2) => !e2.tid);
           let finalEntries = entries;
           if (needsWrite) {
             const byId = new Map(data.memories.map((m) => [m.id, m]));
             finalEntries = await this.bridge.wbUpdate(book, (fresh) => {
+              guard();
               plan = planMemorySync(data.memories.filter(notBaibai), fresh, opts());
               return applyPlanToEntries(fresh, plan, byId);
             });
@@ -300,7 +312,7 @@
             mb.pendingDelete = mb.pendingDelete.filter((r) => !handledRemoved.has(r.id));
             if (plan.skipped.length) log(s, "info", "有 " + plan.skipped.length + " 个世界书条目超过 8000 字，没有导入手机（世界书里保持原样）", "memory");
             if (stats.conflicts) log(s, "warning", "有 " + stats.conflicts + " 条记忆两边都改过，已采用世界书版本（手机旧内容可在记忆页恢复）", "memory");
-          }, { label: "记忆世界书同步", snapshot: snap });
+          }, { label: "记忆世界书同步", snapshot: snap, guard });
           this.lastBookSig = this.bookSig(finalEntries);
           this.lastHash = fingerprint([this.cfg.name, this.cfg.pendingDelete.length, this.eng.repo.data.memories.map((m) => [m.id, memorySig(m), !!m.wb])]);
           firstPlan = firstPlan || { create: plan.create.length, update: plan.update.length, pull: plan.pull.length, import: plan.import.length, deleteLocal: plan.deleteLocal.length, deleteWB: plan.deleteWB.length, guard: plan.guard };
@@ -314,6 +326,7 @@
       } catch (err) {
         const message = err?.code === "BOOK_MISSING" ? err.message + "。可以点“以手机记忆重建世界书”，或在设置里停止同步。" : redactError(err, this.eng.settings.secrets());
         try {
+          reviewAssert(this.eng, runSnap);
           await this.eng.repo.mutate((s) => {
             s.memoryBook.lastError = message;
           }, { label: "记忆世界书同步失败记录", snapshot: this.bridge.capture() });

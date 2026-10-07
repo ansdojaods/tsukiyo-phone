@@ -559,6 +559,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
   }
   async function handleAction(ui, action, value, target) {
     const engine = ui.engine;
+    if (action.startsWith("review-") || action === "soul-char-del") return reviewAction(ui, action, value);
     if (action.startsWith("center-")) return centerAction(ui, action, value);
     if (action.startsWith("st-")) return studioAction(ui, action, value);
     if (action.startsWith("avs-")) return handleVisualAction(ui, action, value);
@@ -664,9 +665,8 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
           ui.notify("记忆世界书「" + name + "」已创建并绑定。" + syncNote(res));
         } catch (err) {
           if (err.code !== "BOOK_EXISTS") throw err;
-          if (!await ui.confirm("连接已有的世界书？", "「" + err.book + "」已经存在，里面有 " + err.count + " 个条目。连接后这些条目会作为记忆导入手机；它们不会被改动，除非你之后在手机里编辑。", "连接并导入")) return;
-          const res = await mb.link({ name: err.book, scope: r.scope, acceptExisting: true });
-          ui.notify("已连接「" + err.book + "」。" + syncNote(res));
+          ui.notify("同名世界书已存在，请预览后勾选需要读取的条目。");
+          await reviewAction(ui, "review-memory-connect", err.book);
         }
         return;
       }
@@ -1656,20 +1656,15 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
       case "book-create": {
         const r = await ui.dialog("创建世界书工坊", hint("会新建一本世界书并追加绑定到当前角色卡（不动原有的世界书绑定）。手机里的日记、心迹、摘要、人物档案、约定、备忘会按你勾选的数据类型写成条目；可以在酒馆里直接修改，手机自动同步。") + field("世界书名称", "name", ui.data.bookSync?.name || defaultBookName(ui.snapshot, "card").replace(/-小手机记忆/, "-小手机世界书"), { required: true, max: 120 }) + select("范围", "scope", [["card", "整张角色卡共用（推荐：这张卡新开的聊天共用同一本）"], ["chat", "只给当前聊天用（每个聊天一本，互不混）"]], "card") + select("写入内容", "sources", [["all", "日记 + 心迹 + 摘要 + 人物档案 + 约定（推荐）"], ["light", "只写日记、心迹与约定"], ["persona", "只写人物档案（NPC 性格与资料）"]], "all"), { submit: "创建并同步" });
         if (!r) return;
-        if (r.sources !== "all") await ui.engine.bookStudio.setOptions({});
         try {
-          const res = await ui.engine.bookStudio.link({ name: r.name, scope: r.scope });
-          if (r.sources === "light") {
-            for (const [id2, on] of [["summaries", false], ["persona", false], ["notes", false], ["tasks", false]]) await ui.engine.bookStudio.setSource(id2, on);
-          } else if (r.sources === "persona") {
-            for (const [id2, on] of [["diary", false], ["hearts", false], ["summaries", false], ["agenda", false]]) await ui.engine.bookStudio.setSource(id2, on);
-            await ui.engine.bookStudio.setOptions({ constantPersona: false });
-          }
+          const sourceKeys = r.sources === "light" ? ["diary", "hearts", "agenda"] : r.sources === "persona" ? ["persona"] : ["diary", "hearts", "summaries", "persona", "agenda"];
+          const sources = Object.fromEntries(Object.keys(BOOK_SOURCES).map(k => [k, sourceKeys.includes(k)]));
+          const res = await ui.engine.bookStudio.link({ name: r.name, scope: r.scope, sources });
           const st = res?.stats;
           ui.notify("世界书已创建并绑定。" + (st ? `新增 ${st.created} 条、更新 ${st.updated} 条。` : ""));
         } catch (err) {
           if (err?.code === "BOOK_EXISTS") {
-            ui.notify("已存在同名世界书（" + err.count + " 个条目），没有覆盖。", "error");
+            ui.notify("已存在同名世界书（" + err.count + " 个条目），没有覆盖。请改用“读取已有世界书并同步”来预览连接。", "error");
           } else ui.notify(err?.message || "创建失败", "error");
         }
         return;
@@ -1853,7 +1848,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
         return;
       }
       case "soul-entry-del": {
-        const [name, section, entryId] = String(value || "").split("|");
+        const [name, section, entryId] = String(value || "").startsWith("[") ? JSON.parse(value) : String(value || "").split("|");
         await change(ui, (s) => {
           soulRemoveEntry(soulData(s), name, section, entryId);
         }, "删除灵魂链接条目");
@@ -1870,7 +1865,8 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
           for (const d of s.diary.filter((x) => x.author === c.id).slice(-4)) lines.push("【小手机·" + (d.kind === "heart" ? "心迹" : "日记") + "】" + text(d.text, 80));
           for (const a2 of s.agenda.filter((x) => String(x.title || "").includes(value)).slice(-4)) lines.push("【小手机·约定】" + text(a2.title, 60) + (a2.date ? "（" + a2.date + "）" : ""));
           assert(lines.length, "这个角色还没有可合入的手机记录");
-          added = engine.soul.pushPhoneLines(value, lines, { floor: ui.snapshot?.floor ?? -1 });
+          for (const line of lines) if (soulAddEntry(soulData(s), value, "记忆", line, { floor: ui.snapshot?.floor ?? -1, source: "phone" }).added) added++;
+          soulData(s).stats.entries = Object.values(soulData(s).roster).reduce((n, row) => n + soulEntryCount(row), 0);
         }, "灵魂链接 · 合入手机记录");
         ui.notify(added ? "已合入 " + added + " 条手机记录。" : "没有新内容（已去重）。");
         return;

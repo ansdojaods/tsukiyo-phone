@@ -19,7 +19,7 @@
     const keys = (raw?.strategy?.keys || raw?.keys || []).map((k) => typeof k === "string" ? k : k && k.source ? "/" + k.source + "/" : String(k));
     return { uid: raw.uid ?? raw.id, name: String(raw.name ?? raw.comment ?? ""), content: String(raw.content ?? ""), keys: cleanKeys(keys), enabled: raw.enabled !== false, tid: String(raw.extra?.[MEMORY_TAG]?.id || ""), foreign: String(raw.extra?.[MEMORY_TAG]?.source || "") === "book-studio" };
   }
-  function planMemorySync(memories, rawEntries, { removed = [], newId = () => "memory-" + Math.random().toString(36).slice(2, 10) } = {}) {
+  function planMemorySync(memories, rawEntries, { removed = [], allowedImportUids = null, newId = () => "memory-" + Math.random().toString(36).slice(2, 10) } = {}) {
     const entries = rawEntries.map(normalizeEntry).filter((e2) => e2.uid !== void 0 && !e2.foreign);
     const byUid = new Map(entries.map((e2) => [e2.uid, e2]));
     const byTid = /* @__PURE__ */ new Map();
@@ -82,6 +82,7 @@
         plan.skipped.push({ uid: e2.uid, name: e2.name, reason: "内容超过 8000 字，没有导入" });
         continue;
       }
+      if (Array.isArray(allowedImportUids) && !allowedImportUids.includes(e2.uid)) continue;
       plan.import.push({ ...e2, mid: e2.tid && !memories.some((m) => m.id === e2.tid) ? e2.tid : newId() });
     }
     const dl = plan.deleteLocal.length;

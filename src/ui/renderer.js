@@ -567,7 +567,8 @@
         return;
       }
       if (action === "modal-choice") {
-        this.finishModal({ choice: id2 });
+        const picker = this.shadow.getElementById("modals").querySelector("form[data-review-picker]");
+        this.finishModal({ ...(picker ? this.formValues(picker) : {}), choice: id2 });
         return;
       }
       if (action === "dismiss-toast") {

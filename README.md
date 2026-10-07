@@ -1,13 +1,23 @@
-# 月夜来信 · 小手机 v2.9.2（TSUKIYO PHONE）
+# 月夜来信 · 小手机 v2.9.3（TSUKIYO PHONE）
 
 > 一个跑在 **SillyTavern + 酒馆助手（Tavern Helper）** 里的“拟真社交与生活手机”：私聊/群聊、主动来信、朋友圈、日记与恋爱心迹、记忆世界书、剧情规划与工作台、可编辑视觉资料库（AVS）、世界书工坊、**内置灵魂链接（NPC 档案 + 发送前角色推演）**、**记忆工作台（分层摘要 / 状态账本 / 本地召回 / 楼层收纳）**、**楼层记忆归属互斥（交给百宝月夜书时不重复生成）**、**百宝月夜书公开 API 联动**、柏宝书联动。
 >
 > 本仓库是 **单文件脚本 + 可编辑模块源码 + 构建/测试工具** 的完整分发版；脚本为原创实现，**不含任何用户 API 密钥或聊天存档**。
 
-- 版本：`2.9.2`
-- 基线：`月夜来信 · 小手机 v2.5.1（剧情中心 · 可编辑视觉资料库 · 剧情工作台 · AVS原生视觉档案 · 百宝月夜书联动）`
-- 产物哈希：`dist/tsukiyo-phone-v2.9.2.js` = `80e5c14f9847af489555c91e60d99fa7664dbb5f3000496ac1efc5094ebe8ac0`（卡内嵌版 `dist/tsukiyo-phone-v2.9.2.embedded.js` = `e2ba5ca39548817d04aa2454e35d10dab02413e8db1dc2f8785ea4129367f316`；完整 sha256 见 `src/manifest.json`）
-- 冒烟测试：`node tools/smoke_test.js` → **115 项全绿**；`node tools/smoke_delegate.js` → **16 项全绿**（v2.9.2 删掉了只服务于外部 SoulLink 桥的那一段测试，并新增 2 条断言保护本次修复）
+- 版本：`2.9.3`
+- 本轮基线：仓库 v2.9.2 / `500d59a7d07ecffe49910e272601ed32d98ccf8c`；本地修复，尚未推送。
+- 产物哈希：独立版 `e0e5c18bbcd300b8531762d44231ade1e7208a74d22dc8f2724cd82050fa9427`；源码逐片哈希见 `src/manifest.json`，全部发行件见交付包校验清单。
+- 测试：115 项逻辑冒烟 + 16 项归属互斥 + 29 个新增回归场景 + 6 组 jsdom DOM 操作流程；均使用宿主/API 桩，不代表真实酒馆端到端验证。
+
+## v2.9.3 本轮修复
+
+- 灵魂档案按钮正确传递角色名；新增角色档案预览与批量删除，防止迟到模型结果复活已删角色。
+- 工坊八类来源统一预览、分页勾选、批量移除与恢复；保留手机本体与第三方条目，排除项不会自动写回。
+- 记忆页可读取已有世界书并勾选导入；另有完整正文预览与批量删除，不与工坊条目争抢。
+- 修复首次同步来源顺序、手机记录合入落盘、长文本重复写出与人物取回后被覆盖；工坊双边冲突保留双方。
+- 保护已有书中未纳入当前同步的其他工坊条目，增加上下文与异步输入变化校验。
+
+完整操作、删除边界、世界书联动限制和测试口径见 [v2.9.3 修复说明](docs/v2.9.3-修复说明.md)。**先备份，再在测试聊天升级；不同时启用两个版本。**
 
 ---
 
@@ -16,9 +26,9 @@
 ```
 tsukiyo-phone/
 ├─ dist/                                 ← 发行文件（直接拿去用）
-│  ├─ tsukiyo-phone-v2.9.2.js                   独立版脚本（酒馆助手 → 脚本库 → 新建/粘贴）
-│  ├─ tsukiyo-phone-v2.9.2.embedded.js          卡内嵌版脚本（大奉打更人卡内预置人物表，预设源见 tools/embedded-preset.json）
-│  └─ 月夜来信小手机_酒馆助手导入版_v2.9.2_剧情中心.json   酒馆助手“导入”用（推荐）
+│  ├─ tsukiyo-phone-v2.9.3.js                   独立版脚本（酒馆助手 → 脚本库 → 新建/粘贴）
+│  ├─ tsukiyo-phone-v2.9.3.embedded.js          卡内嵌版脚本（大奉打更人卡内预置人物表，预设源见 tools/embedded-preset.json）
+│  └─ 月夜来信小手机_酒馆助手导入版_v2.9.3_剧情中心.json   酒馆助手“导入”用（推荐）
 ├─ src/                                  ← 模块源码（由发布版逐字节切片，按 manifest 顺序拼接即得发布版）
 │  ├─ _prelude.js                              文件头 / TSUKIYO_PRESET 注入位 / IIFE 与打包胶水
 │  ├─ core/ host/ services/ ui/ arc/ avs/ studio/ center/ content/
@@ -47,17 +57,17 @@ tsukiyo-phone/
 
 **方式 A：酒馆助手导入（推荐）**
 
-1. 打开 `dist/月夜来信小手机_酒馆助手导入版_v2.9.2_剧情中心.json`；
+1. 打开 `dist/月夜来信小手机_酒馆助手导入版_v2.9.3_剧情中心.json`；
 2. 在酒馆助手的脚本库中「导入」，或按其中的 `name / content` 新建脚本并粘贴 `content`；
 3. 与旧版覆盖式升级没问题：脚本 id 沿用 `5ac630d9-b12e-53ec-bfd1-c7069b1337e5`，**存档格式向后兼容**（旧存档会自动补默认值，包括 v2.8 的 `soul` 与 v2.9 的 `ms / memApi` 切片）。
 
 **方式 B：直接粘贴脚本**
 
-把 `dist/tsukiyo-phone-v2.9.2.js` 全文粘贴进酒馆助手脚本内容即可（该文件自带 `TsukiyoPhoneBundle.start({mode:'card',source:window});` 启动行）。
+把 `dist/tsukiyo-phone-v2.9.3.js` 全文粘贴进酒馆助手脚本内容即可（该文件自带 `TsukiyoPhoneBundle.start({mode:'card',source:window});` 启动行）。
 
 **方式 C：角色卡内嵌**
 
-卡内嵌版脚本是 `dist/tsukiyo-phone-v2.9.2.embedded.js`（把 `tools/embedded-preset.json` 的预置人物/开场数据注入 `_prelude.js` 的 `TSUKIYO_PRESET` 注入位）。整卡 JSON 请用你自己的角色卡 + 这份脚本体自行打包，卡内 `tavern_helper.scripts` 只替换小手机那一个脚本，其余（MVU / 变量结构 / 状态栏 / 节点路由）与卡正文、开场白、世界书都保持不动。
+卡内嵌版脚本是 `dist/tsukiyo-phone-v2.9.3.embedded.js`（把 `tools/embedded-preset.json` 的预置人物/开场数据注入 `_prelude.js` 的 `TSUKIYO_PRESET` 注入位）。整卡 JSON 请用你自己的角色卡 + 这份脚本体自行打包，卡内 `tavern_helper.scripts` 只替换小手机那一个脚本，其余（MVU / 变量结构 / 状态栏 / 节点路由）与卡正文、开场白、世界书都保持不动。
 
 **升级与回滚**：直接换文件即可；要回滚就用你原来的 v2.5.1 脚本覆盖回来，存档不会丢（v2.7 / v2.8 / v2.9 只是多了字段）。
 
@@ -148,6 +158,9 @@ node tools/build.js /tmp/my-build.js      # 只想快速拼一份的话用它（
 node tools/smoke_test.js                  # 默认读取 dist/tsukiyo-phone-v<版本>.js
 node tools/smoke_test.js /tmp/my-build.js # 也可以指定刚构建出来的文件
 node tools/smoke_delegate.js              # 楼层记忆归属互斥专项（16 项）
+node tools/test_review.js                 # 本轮 29 个回归场景
+npm ci                                  # 仅 DOM 测试需要 jsdom
+npm run verify                          # 构建 + 所有测试，包括 6 组 DOM 流程
 ```
 
 - `src/` 的每个文件都是**发布版的逐字节切片**（含开头的 `  // src/…` 注释行），`src/manifest.json` 记录顺序与 sha256；因此「未改动的源码」拼出来必然与发布版一致（`build.js` 会打印校验结果）。

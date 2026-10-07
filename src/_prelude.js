@@ -1,4 +1,4 @@
-/* 月夜来信 · 小手机 v2.9.2（记忆工作台 · 楼层记忆归属互斥 · 分层摘要 · 本地召回 · 状态账本 · 楼层收纳 · 百宝月夜书联动） ｜ 本版为一次“减重”整改：① 删除「外部 SoulLink 扩展桥」——它需要你先安装第三方酒馆扩展、并把手机记录写回别人的扩展设置，功能与小手机内置的「灵魂链接（NPC 档案 + 发送前推演）」重复，设置页与主页两处同名入口容易误解；现在只保留内置灵魂链接，数据全部在手机自己的存档里（不依赖、不读取任何外部扩展）；② 顺带清掉与本次相关及历年遗留的死代码（无调用点的旧页面 / 旧导入函数 / 重复导出函数），并把 PhoneEngine 组装类从 soullink-bridge.js 切片搬回它本该在的 core/engine.js；③ 修复「灵魂链接 → 导出名单」按钮调用了一个不存在的方法（会报错）的问题。原创实现 · 不含用户 API 密钥或聊天存档 */
+/* 月夜来信 · 小手机 v2.9.3（灵魂档案路由修复 · 批量删除 · 世界书条目预览与管理 · 已有世界书连接 · 同步与异步结果保护）原创实现；升级前备份。 */
 var TSUKIYO_PRESET = /*@@PRESET@@*/null/*@@END@@*/;
 var TsukiyoPhoneBundle = (() => {
   var PRESET = typeof TSUKIYO_PRESET === "object" && TSUKIYO_PRESET && Array.isArray(TSUKIYO_PRESET.contacts) ? TSUKIYO_PRESET : null;
