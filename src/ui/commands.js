@@ -188,10 +188,13 @@
     if (!queueOnly && ui.engine.soul) await ui.engine.soul.beforePhoneSend(t).catch(() => {
     });
     const input = ui.shadow.getElementById("phone-composer");
+    // 【2.9.6】记下发送前焦点在不在输入框：在的话发完立刻还给它（手机键盘不闪、不断输入法）
+    const hadFocus = !!input && ui.shadow.activeElement === input;
     const value = text(input?.dataset.thread === t.id ? input.value : ui.draftFor(t), 2e3);
     if (value) {
       await change(ui, (s) => queueMessage(s, t.id, value), queueOnly ? "暂存待发消息" : "准备发送", snap);
       ui.setDraft(t, "");
+      if (hadFocus) ui.focusComposer();
     }
     still(ui, snap);
     const latest = namedThread(ui, threadId);
@@ -1957,11 +1960,29 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
       }
       case "ms-engine-sync": {
         const d = ui.engine.ms.syncMirror({ force: true });
-        ui.notify(d ? "已读取百宝月夜书剪辑台镜像：摘要 " + ((d.counts && (d.counts.active ?? d.counts.summaries)) ?? 0) + " 条 · 缺口 " + ((d.coverage && (d.coverage.missing || []).length) || 0) + " 段。" : "没检测到百宝月夜书「剧情剪辑台」（需要挂在 window.STBaiBaiBook.memoryEditor）。");
+        if (!d) ui.notify("没检测到百宝月夜书「剧情剪辑台」（需要挂在 window.STBaiBaiBook.memoryEditor）。");
+        else if (d.closed) ui.notify("检测到「剧情剪辑台」，但它的总开关是关着的：手机继续自己管楼层记忆。到剪辑台里打开总开关就会自动接管。");
+        else ui.notify("已读取百宝月夜书剪辑台镜像：摘要 " + ((d.counts && (d.counts.active ?? d.counts.summaries)) ?? 0) + " 条 · 缺口 " + ((d.coverage && (d.coverage.missing || []).length) || 0) + " 段。");
+        return;
+      }
+      case "ms-engine-open": {
+        // v2.9.5：反向打开百宝月夜书的剪辑台抽屉（它的 memoryEditor 暴露了 open()）
+        const found = ui.engine.ms.engineEditor();
+        const open = found && typeof found.api.open === "function" ? found.api.open : null;
+        if (!open) {
+          ui.notify(found ? "这个版本的剪辑台没提供 open()（需要百宝月夜书 1.4.2+）。先在魔杖菜单里点「剧情剪辑台」。" : "没检测到百宝月夜书「剧情剪辑台」。");
+          return;
+        }
+        try {
+          open.call(found.api);
+          ui.notify("已打开百宝月夜书的「剧情剪辑台」。");
+        } catch (e2) {
+          ui.notify("打开剪辑台失败：" + text(e2 && e2.message ? e2.message : e2, 120));
+        }
         return;
       }
       case "ms-engine-help":
-        ui.notify("接线：把百宝月夜书侧的「剧情剪辑台」挂到 window.STBaiBaiBook.memoryEditor，提供 capability() 与 mirror() 即可；手机只读，不改动它的记忆。");
+        ui.notify("接线：百宝月夜书的「剧情剪辑台」挂在 window.STBaiBaiBook.memoryEditor，提供 capability() / mirror() 供手机只读；手机不改动它的记忆，也能用它的 open() 打开抽屉。");
         return;
       case "ms-tab":
         ui.go("ms", "", { tab: value || "overview", replace: true });

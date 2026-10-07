@@ -18,7 +18,7 @@ const path = require("path");
 const crypto = require("crypto");
 
 const root = path.join(__dirname, "..");
-const pkg = { version: "2.9.4", name: "tsukiyo-phone" };
+const pkg = { version: "2.9.6", name: "tsukiyo-phone" };
 const manifestPath = path.join(root, "src", "manifest.json");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 const sha = (s) => crypto.createHash("sha256").update(s, "utf8").digest("hex");
@@ -63,7 +63,7 @@ if (fs.existsSync(presetFile)) {
 // ---- 3. 酒馆助手导入版 JSON（content = 独立版全文） ----
 // Stable metadata: clean builds do not depend on a previous dist file.
 const meta = { type: "script", enabled: true, id: "5ac630d9-b12e-53ec-bfd1-c7069b1337e5", button: { enabled: false, buttons: [] }, data: {}, export_with: { data: true, button: true } };
-const newInfo = "v2.9.4：新增工坊同步变更预览与逐项执行、逐条冲突处理、本地回收站及备份导入导出、记忆导入范围管理、脱敏升级自检。回收站满时阻止新删除，不静默清理；恢复默认不写出。先备份，停用旧脚本。";
+const newInfo = "v2.9.6：私信输入法修复 —— 输入框不再被整块重绘打断（焦点、光标、输入法拼字都保住），拼字过程中不会误发，发送后光标留在输入框；手机/平板回车换行，电脑上仍是回车发送、Shift+回车换行。先备份，停用旧脚本。";
 const payload = {
   ...meta,
   type: "script",

@@ -1,4 +1,7 @@
   // src/services/memory-studio.js — v2.9 记忆工作台（分层摘要 / 状态账本 / 本地召回 / 楼层收纳 / 补课）
+  // 【待命实现】这是百宝月夜书「剧情剪辑台」的备用实现：引擎没装（或它的总开关关着）时由手机自管；
+  // 引擎在管时手机整体让行，只保留只读镜像。为免两份实现走岔：这条线**只修安全与兼容，不再新增能力**，
+  // 新能力一律加到剪辑台；两侧共用的算法取值由 tools/test_contract.cjs 与柏宝书 tests/memory-editor/contract.test.cjs 夹具把住。
   var MS_LEVEL_NAME = { 0: "剧情摘要", 1: "阶段总结", 2: "多次总结" };
   var MS_KINDS = { person: "人物", relation: "关系", promise: "约定", item: "物品", place: "地点", time: "时间", other: "其它" };
   var MS_MODES = { reply: "回复里自带摘要", extra: "每轮回复后另外生成", manual: "只在我点按钮时生成" };
@@ -21,7 +24,7 @@
         keywords: [], useLocal: true, includeBaibai: true, includeLife: true, includeLedger: true
       },
       inject: { enabled: true, last: null },
-      delegate: { enabled: true, keepPhoneRecall: false, engine: "", apiVersion: 0, at: 0, counts: null, coverage: null, lastRecall: null, note: "" },
+      delegate: { enabled: true, keepPhoneRecall: false, engine: "", apiVersion: 0, at: 0, counts: null, coverage: null, lastRecall: null, closed: false, note: "" },
       tree: [], drafts: [], ledger: [], undo: [], hidden: [], history: [],
       shelve: { enabled: false, keepRecent: 80, lastRun: 0, supported: null, note: "" },
       presets: { ...MS_DEFAULT_PROMPTS },
@@ -174,8 +177,8 @@
     assert(Array.isArray(v.drafts) && v.drafts.length <= 40, "待确认过多");
     assert(Array.isArray(v.ledger) && v.ledger.length <= 600, "状态账本条目过多（上限 600）");
     assert(Array.isArray(v.log) && v.log.length <= 200, "记忆工作台日志过多");
-    v.delegate = { enabled: true, keepPhoneRecall: false, engine: "", apiVersion: 0, at: 0, counts: null, coverage: null, lastRecall: null, note: "", ...(isObject(v.delegate) ? v.delegate : {}) };
-    assert(typeof v.delegate.enabled === "boolean" && typeof v.delegate.keepPhoneRecall === "boolean", "记忆工作台归属开关无效");
+    v.delegate = { enabled: true, keepPhoneRecall: false, engine: "", apiVersion: 0, at: 0, counts: null, coverage: null, lastRecall: null, closed: false, note: "", ...(isObject(v.delegate) ? v.delegate : {}) };
+    assert(typeof v.delegate.enabled === "boolean" && typeof v.delegate.keepPhoneRecall === "boolean" && typeof v.delegate.closed === "boolean", "记忆工作台归属开关无效");
     const c = v.cfg;
     assert(Number.isInteger(c.recallTop) && c.recallTop >= 0 && c.recallTop <= 20, "召回条数需为 0—20");
     assert(Number.isInteger(c.bodyTop) && c.bodyTop >= 0 && c.bodyTop <= 10, "召回正文条数需为 0—10");
@@ -348,6 +351,7 @@
       return this.eng.bridge.mode === "demo" || !!this.eng.router;
     }
     start() {
+      this.listenEngine();
       if (this.timer) return;
       this.timer = setInterval(() => {
         try {
@@ -363,6 +367,7 @@
     }
     dispose() {
       this.stop();
+      if (this.engineOffs) this.engineOffs();
       for (const off of this.offs.splice(0)) try {
         off();
       } catch {
@@ -675,23 +680,94 @@
     /**
      * 探测百宝月夜书是否挂了「剧情剪辑台」。
      * 只看它的 capability() 声明，任何异常都当成「没装」——探测失败不能影响手机自己跑。
+     * v2.9.5：① 与柏宝书 phone 桥用同一套候选窗口（window / parent / top），
+     *          iframe 或卡内脚本场景下不再出现「phone 桥连得上、剪辑台探测落空」；
+     *          ② 带上 closed 标记：剪辑台总开关关掉时手机要自己接管，否则楼层记忆两头没人管。
      */
     engineEditor() {
-      try {
-        const api = this.eng.win?.STBaiBaiBook?.memoryEditor;
-        if (!api || typeof api.capability !== "function") return null;
-        const cap = api.capability();
-        if (!cap || cap.available !== true) return null;
-        return { api, cap };
-      } catch {
-        return null;
+      for (const w of baibaiCandidates(this.eng.win)) {
+        try {
+          const api = w.STBaiBaiBook?.memoryEditor;
+          if (!api || typeof api.capability !== "function") continue;
+          const cap = api.capability();
+          if (!cap || cap.available !== true) continue;
+          return { api, cap, closed: cap.enabled === false };
+        } catch {
+        }
       }
+      return null;
     }
-    /** 是否处于「引擎接管」：开关打开 + 引擎确实在。 */
+    /** 是否处于「引擎接管」：开关打开 + 引擎确实在 + 剪辑台总开关是开的（v2.9.5）。 */
     delegated() {
       const v = this.view();
       if (!v.delegate || v.delegate.enabled === false) return false;
-      return !!this.engineEditor();
+      const found = this.engineEditor();
+      return !!found && found.closed !== true;
+    }
+    /** 把一次引擎镜像写进存档（syncMirror 与 memory-editor 事件共用）。 */
+    applyMirror({ mir, cap, at = Date.now() }) {
+      const patch = {
+        engine: text(cap?.pluginVersion || mir?.pluginVersion || "", 24),
+        apiVersion: Number(cap?.apiVersion || mir?.apiVersion) || 1,
+        at,
+        counts: isObject(mir?.counts) ? mir.counts : null,
+        coverage: isObject(mir?.coverage) ? mir.coverage : null,
+        lastRecall: isObject(mir?.lastRecall) ? mir.lastRecall : null,
+        closed: cap?.enabled === false || mir?.enabled === false,
+        note: cap?.enabled === false || mir?.enabled === false
+          ? "检测到百宝月夜书的「剧情剪辑台」，但它的总开关是关着的：手机继续自己管楼层记忆（在剪辑台里打开总开关后自动接管）"
+          : "楼层记忆由百宝月夜书接管：手机不再生成楼层摘要，也不再注入楼层记忆，两边不会各存一份"
+      };
+      if (patch.closed) {
+        patch.counts = null;
+        patch.coverage = null;
+        patch.lastRecall = null;
+      }
+      // 内容没变就不写存档（事件可能连发；写存档 = 落盘 + 快照）
+      const prev = this.view().delegate || {};
+      const sig = JSON.stringify([patch.engine, patch.apiVersion, patch.counts, patch.coverage, patch.lastRecall, patch.closed, patch.note]);
+      const prevSig = JSON.stringify([prev.engine, prev.apiVersion, prev.counts, prev.coverage, prev.lastRecall, prev.closed, prev.note]);
+      if (sig === prevSig) return patch;
+      this.eng.repo.mutate((d) => {
+        Object.assign(msData(d).delegate, patch);
+      }, { label: "记忆工作台 · 归属探测", snapshot: this.eng.repo.snapshot });
+      return patch;
+    }
+    /**
+     * v2.9.5：订阅剪辑台自己广播的 `st-baibai-book:memory-editor`（detail 就是镜像）。
+     * 以前手机只靠 10 秒节流 + 120 秒巡检 + 手动点，引擎那边刚改完这边要过一会儿才知道。
+     */
+    listenEngine() {
+      if (this.engineOffs) return this.engineOffs;
+      this.engineOffs = () => {
+        for (const off of this.engineOffs.list || []) try {
+          off();
+        } catch {
+        }
+        this.engineOffs.list = [];
+      };
+      this.engineOffs.list = [];
+      const win = this.eng.win;
+      if (!win || typeof win.addEventListener !== "function") return this.engineOffs;
+      const handler = (ev) => {
+        const detail = ev?.detail;
+        if (!isObject(detail) || detail.available !== true) return;
+        // 事件可能连着来（一次生成会发好几条 changed）：最多 3 秒写一次存档
+        if (Date.now() - (this.mirrorEventAt || 0) < 3e3) return;
+        this.mirrorEventAt = Date.now();
+        try {
+          this.applyMirror({ mir: detail, cap: { pluginVersion: detail.pluginVersion, apiVersion: detail.apiVersion, enabled: detail.enabled !== false }, at: Date.now() });
+          this.eng.emit?.("status");
+        } catch (e2) {
+          console.warn("[月夜来信] 剪辑台镜像事件处理失败（忽略）", e2?.message || e2);
+        }
+      };
+      try {
+        win.addEventListener("st-baibai-book:memory-editor", handler);
+        this.engineOffs.list.push(() => win.removeEventListener("st-baibai-book:memory-editor", handler));
+      } catch {
+      }
+      return this.engineOffs;
     }
     /** 读一次引擎的只读镜像（节流 10 秒）写进存档，供界面显示。 */
     syncMirror({ force = false } = {}) {
@@ -706,6 +782,7 @@
           m.counts = null;
           m.coverage = null;
           m.lastRecall = null;
+          m.closed = false;
           m.note = "没检测到百宝月夜书的「剧情剪辑台」（需要挂在 window.STBaiBaiBook.memoryEditor）";
         }, { label: "记忆工作台 · 归属探测", snapshot: this.eng.repo.snapshot });
         return null;
@@ -717,18 +794,7 @@
       } catch {
         mirror = null;
       }
-      const patch = {
-        engine: text(found.cap.pluginVersion || "", 24),
-        apiVersion: Number(found.cap.apiVersion) || 1,
-        at: Date.now(),
-        counts: isObject(mirror?.counts) ? mirror.counts : null,
-        coverage: isObject(mirror?.coverage) ? mirror.coverage : null,
-        lastRecall: isObject(mirror?.lastRecall) ? mirror.lastRecall : null,
-        note: "楼层记忆由百宝月夜书接管：手机不再生成楼层摘要，也不再注入楼层记忆，两边不会各存一份"
-      };
-      this.eng.repo.mutate((d) => {
-        Object.assign(msData(d).delegate, patch);
-      }, { label: "记忆工作台 · 归属探测", snapshot: this.eng.repo.snapshot });
+      const patch = this.applyMirror({ mir: mirror, cap: found.cap });
       return Object.assign({}, v.delegate, patch);
     }
     /** 切换归属（界面用）；返回切换后是否真的处于接管状态。 */

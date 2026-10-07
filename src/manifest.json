@@ -1,18 +1,18 @@
 {
   "generator": "tools/release.js",
-  "version": "2.9.4",
+  "version": "2.9.6",
   "note": "切片为逐字节内容，按 chunks 顺序拼接即为发布版脚本；shas 由 tools/release.js 重算",
-  "sha256": "cee266e894f37b4d0a436de3d75d8bb32624c799650555f140941ae8fbc42611",
+  "sha256": "bf75a08564a1fb37eda925aad9be8d1325962a910f1e857eee0ee94cbd5f3828",
   "chunks": [
     {
       "file": "_prelude.js",
-      "chars": 1125,
-      "sha256": "4d9149587e2b36bdd0d52a4e3145d63f479bdac7bdf2c9792124d11111df4c65"
+      "chars": 1143,
+      "sha256": "da676018a610941f01a5a8473639ebb3000e572ed6a05d78232bcf32b145fdcc"
     },
     {
       "file": "index.js",
-      "chars": 501,
-      "sha256": "abfd982b86a1c368923f84d6936c9edfe232fcac18d5db692f75e3e31efd4c87"
+      "chars": 525,
+      "sha256": "fb31e9f1de922bb90ee7f9d8d9c17998ddcb3a8d606476509f42188dbc12a88d"
     },
     {
       "file": "core/utils.js",
@@ -176,8 +176,8 @@
     },
     {
       "file": "services/memory-studio.js",
-      "chars": 49322,
-      "sha256": "8c8ed15e9c184071ce7821c3181fc5e54c3755b3f56f886208ab9fde298574c3"
+      "chars": 52409,
+      "sha256": "ee584a4c3ae80cb3db41a724edb757ace862f4ab5429313f64319d8cb8e12e99"
     },
     {
       "file": "services/memory-api.js",
@@ -206,8 +206,8 @@
     },
     {
       "file": "ui/views-social.js",
-      "chars": 9686,
-      "sha256": "622d071f4dc6ca462dcba8e282060245af4693b2aa2f59bf85c096944098bb51"
+      "chars": 9874,
+      "sha256": "4c56c47780245e70ea88af6cd37208c98f9212cab710dda4c2b2d211fe677f0d"
     },
     {
       "file": "ui/pick.js",
@@ -221,8 +221,8 @@
     },
     {
       "file": "ui/commands.js",
-      "chars": 133203,
-      "sha256": "9e0dbd2983dcf78ac5f31f2c32356ccc30d7ca5e503f6eefde2dbdde73547e1f"
+      "chars": 134116,
+      "sha256": "003482d496e66834cda2460d013e7d0928305573e92f75a98d86f92d6b16fa2d"
     },
     {
       "file": "arc/ui.js",
@@ -236,8 +236,8 @@
     },
     {
       "file": "ui/views-memory-studio.js",
-      "chars": 13794,
-      "sha256": "9740c30e3508e4b2afd8e0ad2f9a0859c459dfdb10eb46ce32cb792e46116a53"
+      "chars": 14159,
+      "sha256": "6ec01c6668a548880a6db6cc9d2c137e452435e56dc1e265a0ca532a43726630"
     },
     {
       "file": "ui/views-memory-api.js",
@@ -262,12 +262,12 @@
     {
       "file": "services/safety.js",
       "chars": 17186,
-      "sha256": "3ba79564b8865da2d6bc6d8fde250e973ae8ee771e2c06f82d6d6c8a4f31aed8"
+      "sha256": "f03a9b483ff1aee3096ca9da58ed548cfec2daf99f95da01e75beb64c903099e"
     },
     {
       "file": "ui/renderer.js",
-      "chars": 35418,
-      "sha256": "5b9b25b2d61864dfc8d2e9794b2c9add7a9be701e258154b763c2e0f89d37ae9"
+      "chars": 38293,
+      "sha256": "e316033ce9df86d79ab4734830e582df0544aa98b75a1adeaf3edbf00eb40c95"
     },
     {
       "file": "index-2.js",

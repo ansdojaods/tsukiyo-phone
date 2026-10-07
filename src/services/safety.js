@@ -1,4 +1,4 @@
-  // v2.9.4: reviewable writes, explicit conflict decisions, bounded local recovery.
+  // v2.9.6: reviewable writes, explicit conflict decisions, bounded local recovery.
   function safetyPlan(records, entries, cfg) {
     const mine = new Map(entries.filter(bookStampOf).map(e => [String(bookStampOf(e).key), {e,st:bookStampOf(e)}]));
     const byKey = new Map(records.map(r => [r.key,r]));

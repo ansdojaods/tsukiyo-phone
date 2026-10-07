@@ -19,8 +19,11 @@
   function composerView(ui) {
     const t = ui.data?.threads.find((t2) => t2.id === ui.route.id);
     if (!t) return "";
-    const v = ui.draftFor(t);
-    return `<div class="composer">${t.pending.length ? `<div class="pending-strip"><span>${t.pending.length} 条待发 · 尚未交给模型</span><button data-action="clear-pending" data-id="${e(t.id)}">清空</button></div>` : ""}<div class="compose-row"><button class="icon-btn" data-action="chat-tools" aria-label="消息附件与工具">${icon("plus", 20)}</button><textarea id="phone-composer" data-thread="${e(t.id)}" placeholder="写一句，慢慢说…" aria-label="消息输入框" rows="1" maxlength="2000">${e(v)}</textarea><button class="send" data-action="send" data-id="${e(t.id)}" aria-label="发送消息">${icon("send", 19)}</button></div><div class="compose-tools"><button data-action="queue" data-id="${e(t.id)}">${icon("clock", 14)}仅暂存</button><button data-action="memory-thread" data-id="${e(t.id)}">${icon("memory", 14)}记住这段</button><span class="spacer"></span><button data-action="emoji">＋ 表情</button></div></div>`;
+    // 【2.9.6】输入框在 HTML 里留空：草稿由 renderer 的 renderComposer 用 .value 写进去。
+    // 以前把草稿直接拼进 <textarea>…</textarea>：草稿里带 < & 这类字符会被当标签解析，
+    // 而且只要「待发条」数量一变，整个输入框节点都会被换掉，手机键盘与输入法会被打断。
+    const n = t.pending.length;
+    return `<div class="composer"><div class="pending-strip" data-slot="pending"${n ? "" : " hidden"}><span data-slot="pending-text">${n ? e(n + " 条待发 · 尚未交给模型") : ""}</span><button data-action="clear-pending" data-id="${e(t.id)}">清空</button></div><div class="compose-row"><button class="icon-btn" data-action="chat-tools" aria-label="消息附件与工具">${icon("plus", 20)}</button><textarea id="phone-composer" data-thread="${e(t.id)}" placeholder="写一句，慢慢说…" aria-label="消息输入框" rows="1" maxlength="2000" autocomplete="off"></textarea><button class="send" data-action="send" data-id="${e(t.id)}" aria-label="发送消息">${icon("send", 19)}</button></div><div class="compose-tools"><button data-action="queue" data-id="${e(t.id)}">${icon("clock", 14)}仅暂存</button><button data-action="memory-thread" data-id="${e(t.id)}">${icon("memory", 14)}记住这段</button><span class="spacer"></span><button data-action="emoji">＋ 表情</button></div></div>`;
   }
   function contactsView(ui) {
     const s = ui.data, rows = [...s.contacts].sort((a, b) => Number(contactAvailable(b)) - Number(contactAvailable(a))), removed = (s.removedContacts || []).length;

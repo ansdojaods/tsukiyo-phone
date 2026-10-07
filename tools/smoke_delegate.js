@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * v2.9.4 冒烟测试：楼层记忆归属互斥（检测到百宝月夜书「剧情剪辑台」时手机不重复生成 / 不重复注入）。
+ * v2.9.6 冒烟测试：楼层记忆归属互斥（检测到百宝月夜书「剧情剪辑台」时手机不重复生成 / 不重复注入）。
  *
- *   node tools/smoke_delegate.js [dist/tsukiyo-phone-v2.9.4.js]
+ *   node tools/smoke_delegate.js [dist/tsukiyo-phone-v2.9.6.js]
  */
 const fs = require("fs");
 const path = require("path");
 
-const FILE = process.argv[2] || path.join(__dirname, "..", "dist", "tsukiyo-phone-v2.9.4.js");
+const FILE = process.argv[2] || path.join(__dirname, "..", "dist", "tsukiyo-phone-v2.9.6.js");
 const src = fs.readFileSync(FILE, "utf8");
 let code = src.replace(/TsukiyoPhoneBundle\.start\([^)]*\);?\s*$/, "");
 code = code.replace(
@@ -27,7 +27,7 @@ const ok = (cond, msg) => {
 };
 
 /* 假引擎：一份 12 楼聊天 + 一条手机记忆 + 一棵含「摘要标记甲」的摘要树 */
-function makeEngine({ editor = true } = {}) {
+function makeEngine({ editor = true, editorEnabled = true, editorInParent = false } = {}) {
   const data = freshPhone();
   data.ms.enabled = true;
   data.ms.cfg.minScore = 0;
@@ -48,23 +48,55 @@ function makeEngine({ editor = true } = {}) {
     context: () => null,
     capture: () => ({ owner: "o1", floor: 11, present: [], character: { name: "测试卡" }, history, story: { date: "1604-09-05", time: "傍晚", place: "河灯埠" } }),
   };
-  const win = editor
-    ? {
-        STBaiBaiBook: {
-          memoryEditor: {
-            capability: () => ({ available: true, apiVersion: 1, pluginVersion: "1.4.0" }),
-            mirror: () => ({
-              available: true,
-              apiVersion: 1,
-              pluginVersion: "1.4.0",
-              counts: { summaries: 9, active: 3, drafts: 1, ledger: 4, hidden: 0 },
-              coverage: { from: 0, to: 23, step: 6, total: 4, covered: 3, missing: [[18, 23]], ratio: 0.75, extraMissing: [] },
-              lastRecall: { at: Date.now(), floor: 11, chars: 320, budget: 3600, hits: [{ label: "剧情摘要 1-6 楼", score: 0.4, why: ["局部相似度 0.40"] }] },
-            }),
-          },
-        },
+  const editorApi = {
+    capability: () => ({ available: true, apiVersion: 1, pluginVersion: "1.4.2", enabled: editorEnabled !== false, mode: "extra" }),
+    open: () => {
+      editorApi.opened = (editorApi.opened || 0) + 1;
+    },
+    mirror: () => ({
+      available: true,
+      apiVersion: 1,
+      pluginVersion: "1.4.2",
+      enabled: editorEnabled !== false,
+      mode: "extra",
+      counts: { summaries: 9, active: 3, drafts: 1, ledger: 4, hidden: 0 },
+      coverage: { from: 0, to: 23, step: 6, total: 4, covered: 3, missing: [[18, 23]], ratio: 0.75, extraMissing: [] },
+      lastRecall: { at: Date.now(), floor: 11, chars: 320, budget: 3600, hits: [{ label: "剧情摘要 1-6 楼", score: 0.4, why: ["局部相似度 0.40"] }] },
+    }),
+  };
+  const listeners = new Map();
+  const makeWin = () => {
+    const w = {
+      STBaiBaiBook: { memoryEditor: editorApi },
+      addEventListener: (name, fn) => {
+        if (!listeners.has(name)) listeners.set(name, []);
+        listeners.get(name).push(fn);
+      },
+      removeEventListener: (name, fn) => {
+        const list = listeners.get(name) || [];
+        const i = list.indexOf(fn);
+        if (i >= 0) list.splice(i, 1);
+      },
+    };
+    return w;
+  };
+  const win = editor ? makeWin() : {};
+  if (editor && editorInParent) {
+    // 模拟「手机在 iframe / 卡内脚本里，剪辑台在父窗口」：win 自己没有编辑器，parent 有
+    win.parent = makeWin();
+  } else if (editor) {
+    win.parent = win;
+  }
+  win.__emitEditor = (detail) => {
+    for (const fn of (listeners.get("st-baibai-book:memory-editor") || []).slice()) {
+      try {
+        fn({ type: "st-baibai-book:memory-editor", detail });
+      } catch {
       }
-    : {};
+    }
+  };
+  win.__editorApi = editorApi;
+  win.__editorInParent = !!editorInParent;
   const engine = {
     bridge,
     win,
@@ -80,7 +112,7 @@ function makeEngine({ editor = true } = {}) {
   return { engine, data };
 }
 
-console.log("\n[13] v2.9.4 楼层记忆归属互斥（归属探测 / 拦截 / 只留手机内记忆 / 镜像）");
+console.log("\n[13] v2.9.5/2.9.6 楼层记忆归属互斥（归属探测 / 拦截 / 只留手机内记忆 / 镜像）");
 
 const v1 = msFresh();
 ok(v1.delegate && v1.delegate.enabled === true && v1.delegate.keepPhoneRecall === false, "默认：开关打开、不重复注入手机内记忆");
@@ -125,7 +157,7 @@ ok(bThrew === 1 && bThrows === 4, "拦截：剧情摘要 / 阶段总结 / 多次
 
 const mirrored = msB.syncMirror({ force: true });
 ok(
-  !!mirrored && b.data.ms.delegate.engine === "1.4.0" && b.data.ms.delegate.counts.active === 3 && b.data.ms.delegate.coverage.ratio === 0.75 && !!b.data.ms.delegate.lastRecall,
+  !!mirrored && b.data.ms.delegate.engine === "1.4.2" && b.data.ms.delegate.counts.active === 3 && b.data.ms.delegate.coverage.ratio === 0.75 && !!b.data.ms.delegate.lastRecall,
   "镜像：把引擎的版本 / 摘要数 / 覆盖率 / 上次召回写进存档",
 );
 
@@ -157,11 +189,56 @@ let backThrew = 0;
 try { msB.assertOwner("剧情摘要"); } catch (e) { backThrew += 1; }
 ok(msB.delegated() === false && backThrew === 0, "关掉开关即改回手机自己管理（不需要重启）");
 
-/* ⑥ 静态检查 */
+/* ⑥ v2.9.5：剪辑台总开关 / 候选窗口 / 镜像事件 / 反向打开 */
+const d1 = makeEngine({ editor: true, editorEnabled: false });
+const msD = new MemoryStudio(d1.engine);
+d1.engine.ms = msD;
+ok(msD.delegated() === false, "剪辑台总开关关着时不算接管（手机继续自己管，避免两头空）");
+let dThrew = 0;
+try {
+  msD.assertOwner("剧情摘要");
+} catch (e) {
+  dThrew += 1;
+}
+ok(dThrew === 0, "总开关关着：手机生成楼层摘要不再被拦截");
+const dMirror = msD.syncMirror({ force: true });
+ok(!!dMirror && dMirror.closed === true && dMirror.counts === null, "镜像标记「剪辑台已关闭」，不显示过期数据");
+ok(msD.setDelegate(true) === false, "开着归属开关但剪辑台关闭 → 仍是手机自管");
+ok(msD.engineEditor().closed === true, "engineEditor 仍能报出剪辑台「装着但关着」");
+
+const d2 = makeEngine({ editor: true, editorEnabled: true });
+const msE = new MemoryStudio(d2.engine);
+d2.engine.ms = msE;
+msE.start();
+ok(msE.delegated() === true, "总开关打开：恢复接管");
+d2.engine.win.__emitEditor({
+  available: true, apiVersion: 1, pluginVersion: "1.4.2", enabled: true,
+  counts: { summaries: 12, active: 5, drafts: 2, ledger: 6, hidden: 1 },
+  coverage: { from: 0, to: 35, step: 6, total: 6, covered: 5, missing: [[30, 35]], ratio: 0.83, extraMissing: [] },
+  lastRecall: { at: Date.now(), floor: 17, chars: 400, budget: 3600, hits: [] },
+});
+ok(
+  msE.data().ms.delegate.counts.active === 5 && msE.data().ms.delegate.coverage.ratio === 0.83 && msE.data().ms.delegate.engine === "1.4.2",
+  "订阅 st-baibai-book:memory-editor：镜像事件一到就写进存档（不用等 10 秒节流）",
+);
+msE.stop();
+
+const p1 = makeEngine({ editor: true, editorInParent: true });
+const msP = new MemoryStudio(p1.engine);
+p1.engine.ms = msP;
+ok(msP.delegated() === true, "剪辑台在父窗口（iframe/卡内脚本）时也能探测到：与柏宝书桥用同一套候选窗口");
+
+const msOpen = new MemoryStudio(d2.engine);
+d2.engine.ms = msOpen;
+const apiOpen = msOpen.engineEditor();
+apiOpen.api.open();
+ok(d2.engine.win.__editorApi.opened === 1, "剪辑台提供了 open()：手机工作台可以反向打开它");
+
+/* ⑦ 静态检查 */
 const patched = src;
 ok(
-  /version: "2\.9\.4"/.test(patched) && /小手机 v2\.9\.4/.test(patched),
-  "版本号与头部注释 2.9.4",
+  /version: "2\.9\.6"/.test(patched) && /小手机 v2\.9\.6/.test(patched),
+  "版本号与头部注释 2.9.6",
 );
 ok(
   /delegate: \{ enabled: true, keepPhoneRecall: false/.test(patched) && /this\.assertOwner\(/.test(patched) && /msDelegateCard/.test(patched) && /keepPhoneRecall: false, engine: ""/.test(patched),

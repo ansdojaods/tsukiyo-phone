@@ -21,15 +21,23 @@
   }
   function msDelegateCard(ui) {
     const v = ui.data.ms, d = v.delegate || {};
-    const found = (() => {
-      try {
-        return !!ui.engine.ms.engineEditor();
-      } catch {
-        return false;
-      }
-    })();
-    const on = d.enabled !== false, active = on && found, counts = d.counts || null, cov = d.coverage || null;
-    return `<div class="card"><div class="row-top"><b>楼层记忆归属</b><small class="muted">${found ? "已检测到百宝月夜书剪辑台" : "未检测到百宝月夜书剪辑台"}</small></div><p class="tiny muted">同一段剧情如果两边各写一次摘要，就会被注入两次，缺口数字也会互相打架。所以约定：楼层记忆归百宝月夜书，手机只管手机内部交流记忆。</p>${active ? `<div class="row-top" style="margin:6px 0"><span class="tiny">${tag("引擎接管中", "gold")}${d.engine ? tag("剪辑台 " + e(d.engine)) : ""}</span><small class="muted">${e(autoAgo(d.at))} 探测</small></div>${cov ? `<p class="tiny muted">引擎覆盖 ${Math.round((cov.ratio || 0) * 100)}% · 缺口 ${(cov.missing || []).length} 段${counts ? " · 摘要 " + (counts.active ?? counts.summaries ?? 0) + " 条 · 待确认 " + (counts.drafts ?? 0) + " 条" : ""}</p>` : ""}${d.lastRecall ? `<p class="tiny muted">引擎上次召回：#${(d.lastRecall.floor ?? 0) + 1} 楼 · ${(d.lastRecall.hits || []).length} 条 / ${d.lastRecall.chars} 字</p>` : ""}<p class="form-note">手机侧自动摘要、楼层召回与「补缺口」已停用；手机内记忆仍可通过柏宝书推送交给百宝月夜书统一注入。</p>` : ""}${switchRow("楼层记忆交由引擎管理", "检测到百宝月夜书「剧情剪辑台」时生效：手机不再生成楼层摘要、不再注入楼层记忆，避免两边各存一份", "ms-delegate-toggle", on)}${switchRow("接管期间仍注入手机内记忆", "只注入手机自己的记忆与生活细节（不含楼层摘要与状态账本）；已经用推送把手机记录交给百宝月夜书的话建议保持关闭", "ms-delegate-phone-recall", d.keepPhoneRecall === true)}<div class="buttons">${button(icon("spark", 14) + " 重新探测引擎", "ms-engine-sync")}${found ? "" : button("接线说明", "ms-engine-help")}</div>${d.note ? `<p class="form-note">${e(d.note)}</p>` : ""}</div>`;
+    let found = null;
+    try {
+      found = ui.engine.ms.engineEditor() || null;
+    } catch {
+      found = null;
+    }
+    const on = d.enabled !== false;
+    const closed = !!(found && found.closed);       // 剪辑台装着但总开关关着（v2.9.5）
+    const active = on && !!found && !closed;        // 真正处于「引擎接管」
+    const counts = d.counts || null, cov = d.coverage || null;
+    const stateText = !found ? "未检测到百宝月夜书剪辑台" : closed ? "已检测到剪辑台（它的总开关是关着的）" : "已检测到百宝月夜书剪辑台";
+    const activeBlock = active
+      ? `<div class="row-top" style="margin:6px 0"><span class="tiny">${tag("引擎接管中", "gold")}${d.engine ? tag("剪辑台 " + e(d.engine)) : ""}</span><small class="muted">${e(autoAgo(d.at))} 探测</small></div>${cov ? `<p class="tiny muted">引擎覆盖 ${Math.round((cov.ratio || 0) * 100)}% · 缺口 ${(cov.missing || []).length} 段${counts ? " · 摘要 " + (counts.active ?? counts.summaries ?? 0) + " 条 · 待确认 " + (counts.drafts ?? 0) + " 条" : ""}</p>` : ""}${d.lastRecall ? `<p class="tiny muted">引擎上次召回：#${(d.lastRecall.floor ?? 0) + 1} 楼 · ${(d.lastRecall.hits || []).length} 条 / ${d.lastRecall.chars} 字</p>` : ""}<p class="form-note">手机侧自动摘要、楼层召回与「补缺口」已停用；手机内记忆仍可通过柏宝书推送交给百宝月夜书统一注入。</p>`
+      : closed
+        ? `<p class="form-note">剪辑台的总开关关着 = 它现在不生成、不召回、不注入。手机继续自己管楼层记忆，不会出现「两边都不管」的空档；在剪辑台里打开总开关后，手机下次探测（或它广播变化时）会自动让位。</p>`
+        : "";
+    return `<div class="card"><div class="row-top"><b>楼层记忆归属</b><small class="muted">${stateText}</small></div><p class="tiny muted">同一段剧情如果两边各写一次摘要，就会被注入两次，缺口数字也会互相打架。所以约定：楼层记忆归百宝月夜书，手机只管手机内部交流记忆。</p>${activeBlock}${switchRow("楼层记忆交由引擎管理", "检测到百宝月夜书「剧情剪辑台」且它开着总开关时生效：手机不再生成楼层摘要、不再注入楼层记忆，避免两边各存一份", "ms-delegate-toggle", on)}${switchRow("接管期间仍注入手机内记忆", "只注入手机自己的记忆与生活细节（不含楼层摘要与状态账本）；已经用推送把手机记录交给百宝月夜书的话建议保持关闭", "ms-delegate-phone-recall", d.keepPhoneRecall === true)}<div class="buttons">${button(icon("spark", 14) + " 重新探测引擎", "ms-engine-sync")}${found ? button(icon("book", 14) + " 打开剪辑台", "ms-engine-open") : button("接线说明", "ms-engine-help")}</div>${d.note ? `<p class="form-note">${e(d.note)}</p>` : ""}</div>`;
   }
   function msView(ui) {
     const v = ui.data.ms, ms = ui.engine.ms, info = ms.info(), tab = ui.route.tab || "overview";

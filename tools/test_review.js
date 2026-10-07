@@ -1,5 +1,5 @@
 const fs=require('fs'),path=require('path'),A=require('node:assert/strict');
-let code=fs.readFileSync(path.join(__dirname,'../dist/tsukiyo-phone-v2.9.4.js'),'utf8').replace(/TsukiyoPhoneBundle\.start\([^)]*\);?\s*$/,'');
+let code=fs.readFileSync(path.join(__dirname,'../dist/tsukiyo-phone-v2.9.6.js'),'utf8').replace(/TsukiyoPhoneBundle\.start\([^)]*\);?\s*$/,'');
 const names=['freshPhone','BookStudio','MemoryBook','SoulStudio','soulEnsure','soulAddEntry','soulData','soulRow','soulCharView','reviewAction','reviewPick','reviewSoulDelete','reviewBookSig','planMemorySync','fingerprint','bookFreshState','handleAction','normalizePhone'];
 code=code.replace('return __toCommonJS(index_exports);','__export(index_exports,{'+names.map(n=>n+':()=>'+n).join(',')+'});return __toCommonJS(index_exports);');
 const T=new Function(code+';return TsukiyoPhoneBundle;')();let count=0;const clone=x=>JSON.parse(JSON.stringify(x));

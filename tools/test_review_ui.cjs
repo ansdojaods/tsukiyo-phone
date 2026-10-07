@@ -1,5 +1,5 @@
 const fs=require('fs'),path=require('path'),A=require('node:assert/strict'),{JSDOM}=require('jsdom');
-let code=fs.readFileSync(path.join(__dirname,'../dist/tsukiyo-phone-v2.9.4.js'),'utf8').replace(/TsukiyoPhoneBundle\.start\([^)]*\);?\s*$/,'');code=code.replace('return __toCommonJS(index_exports);','__export(index_exports,{soulEnsure:()=>soulEnsure});return __toCommonJS(index_exports);');
+let code=fs.readFileSync(path.join(__dirname,'../dist/tsukiyo-phone-v2.9.6.js'),'utf8').replace(/TsukiyoPhoneBundle\.start\([^)]*\);?\s*$/,'');code=code.replace('return __toCommonJS(index_exports);','__export(index_exports,{soulEnsure:()=>soulEnsure});return __toCommonJS(index_exports);');
 const dom=new JSDOM('<html><body></body></html>',{runScripts:'outside-only',pretendToBeVisual:true,url:'https://review.test/'}),w=dom.window;w.eval(code+';window.B=TsukiyoPhoneBundle;');const app=w.B.start({mode:'demo',source:w}),delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn){for(let i=0;i<150;i++){if(fn())return;await delay(10);}throw Error('UI timeout: '+app.ui.shadow.getElementById('notices').textContent);}
 const find=(act,id,scope)=>[...(scope||app.ui.shadow).querySelectorAll('[data-action]')].find(n=>n.dataset.action===act&&(id===undefined||n.dataset.id===id));

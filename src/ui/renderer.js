@@ -17,6 +17,8 @@
       this.modalResolve = null;
       this.inputTimer = null;
       this.timer = null;
+      this.composing = false;
+      this.composerThread = "";
       this.lastOwner = "";
       this.lastContent = "";
       this.currentScroll = 0;
@@ -83,11 +85,25 @@
           }, 800);
         }
       });
+      // 【2.9.6】私信输入法保护（手机端「写着写着输入法被打断」的三条来源一起堵）：
+      //  ① 组合中（拼音/候选字）不重绘输入框、不把 Enter 当发送 —— 见 renderComposer / watchComposition；
+      //  ② 点「发送」「仅暂存」不再把焦点从输入框抢走：手机键盘不会闪一下又收起来，候选框也不会断；
+      //  ③ 发送后输入框节点不换、光标留在原位，可以接着写下一句。
       this.shadow.addEventListener("keydown", (event) => {
-        if (event.target.id === "phone-composer" && event.key === "Enter" && !event.shiftKey && !event.isComposing) {
-          event.preventDefault();
-          this.act("send", event.target.dataset.thread);
-        }
+        if (event.target.id !== "phone-composer" || event.key !== "Enter" || event.shiftKey) return;
+        // 输入法确认候选字时（组合中）不发送：isComposing 是新标准，keyCode 229 兼容旧实现
+        if (event.isComposing || event.keyCode === 229 || this.composing) return;
+        // 【2.9.6】回车发送只在宽屏（电脑）生效；手机/平板上回车交给输入法换行，发送点右侧按钮
+        // —— 手机键盘上的回车本来就常被输入法用来「上屏 / 换行」，不再让它承担发送职责。
+        if (this.composerCompact()) return;
+        event.preventDefault();
+        this.act("send", event.target.dataset.thread);
+      });
+      this.shadow.addEventListener("pointerdown", (event) => {
+        const hit = event.target.closest?.('[data-action="send"],[data-action="queue"]');
+        if (!hit) return;
+        // 阻止默认 = 不移动焦点：触屏上键盘/输入法保持在前台，桌面端也不会丢掉选区
+        event.preventDefault();
       });
       this.shadow.addEventListener("change", (event) => {
         const node = event.target;
@@ -422,7 +438,15 @@
     setDraft(t, value) {
       this.localDrafts.set(this.snapshot.owner + "|" + t.id, value);
       const input = this.shadow.getElementById("phone-composer");
-      if (input) input.value = value;
+      if (!input) return;
+      input.value = value;
+      // 还在输入框里就把光标放到末尾；不在也不抢焦点（别把键盘拽起来）
+      if (this.shadow.activeElement === input && !this.composing) {
+        try {
+          input.setSelectionRange(value.length, value.length);
+        } catch {
+        }
+      }
     }
     async markRead(threadId) {
       if (!this.opened || this.engine.state !== "ready") return;
@@ -473,24 +497,74 @@
         main.scrollTop = this.route.view === "chat" && wasBottom ? main.scrollHeight : scroll;
         this.loadMedia();
       }
-      const composer = root.getElementById("composer-area"), input = root.getElementById("phone-composer"), inputState = input ? { thread: input.dataset.thread, value: input.value, start: input.selectionStart, end: input.selectionEnd, focused: root.activeElement === input } : null;
-      const composition = this.route.view === "chat" && s && this.engine.state === "ready" ? composerView(this) : "";
-      if (composer.innerHTML !== composition) {
-        composer.innerHTML = composition;
-        if (inputState) {
-          const next = root.getElementById("phone-composer");
-          if (next && next.dataset.thread === inputState.thread) {
-            next.value = inputState.value;
-            if (inputState.focused) {
-              next.focus();
-              next.setSelectionRange(inputState.start, inputState.end);
-            }
-          }
-        }
-      }
+      this.renderComposer(s);
       root.getElementById("dock").innerHTML = [["home", "home", "桌面"], ["messages", "chat", "消息"], ["planner", "compass", "规划"], ["settings", "settings", "设置"]].map(([v, i, label]) => `<button class="${this.route.view === v ? "selected" : ""}" data-action="go" data-id="${v}" aria-label="${label}">${icon(i, 20)}${v === "messages" && count ? `<span class="badge">${count}</span>` : ""}</button>`).join("");
       root.getElementById("connection-note").textContent = this.demo ? "离线演示 · 不调用真实模型" : this.engine.bridge.injectionReady ? "● 正文记忆接口已连接" + (s?.settings.inject ? "" : " · 当前注入已关闭") : "○ 正文注入尚未就绪 · 请检查酒馆接口";
       if (this.route.view === "chat" && this.opened) queueMicrotask(() => this.markRead(this.route.id));
+    }
+    /**
+     * 【2.9.6】输入框只在「换会话」时重建：
+     *  - 会话没变 → 只更新旁边的「N 条待发」条，连一个节点都不动（焦点、光标、输入法组合全保住）；
+     *  - 草稿一律走 .value 写入，不再拼进 HTML（草稿里的 < & 不再被当标签吃掉）；
+     *  - 外部改动（导入存档、切换聊天）在没聚焦、没组合时才对账一次。
+     */
+    renderComposer(s) {
+      const area = this.shadow.getElementById("composer-area");
+      if (!area) return;
+      const t = this.route.view === "chat" && s && this.engine.state === "ready" ? s.threads.find((x) => x.id === this.route.id) : null;
+      if (!t) {
+        if (area.childElementCount) area.replaceChildren();
+        this.composerThread = "";
+        return;
+      }
+      let input = area.querySelector("#phone-composer");
+      if (!input || input.dataset.thread !== t.id) {
+        area.innerHTML = composerView(this);
+        input = area.querySelector("#phone-composer");
+        if (input) {
+          input.value = this.draftFor(t);
+          this.composerThread = t.id;
+          this.watchComposition(input);
+        }
+      } else if (!this.composing && this.shadow.activeElement !== input) {
+        const want = this.draftFor(t);
+        if (input.value !== want) input.value = want;
+      }
+      if (input) input.title = this.composerCompact() ? "回车换行 · 点右侧 ➤ 发送" : "回车发送 · Shift+回车换行";
+      const strip = area.querySelector('[data-slot="pending"]');
+      if (strip) {
+        const n = t.pending.length;
+        const label = strip.querySelector('[data-slot="pending-text"]');
+        if (label) label.textContent = n ? n + " 条待发 · 尚未交给模型" : "";
+        strip.hidden = !n;
+      }
+    }
+    /** 手机/平板布局（回车交给输入法换行）；demo 与未探测到布局时按电脑处理 */
+    composerCompact() {
+      return this.mode === "phone" || this.mode === "tablet";
+    }
+    /** 记录输入法组合状态：组合中不重绘输入框、不把 Enter 当发送 */
+    watchComposition(input) {
+      if (input.dataset.composeWatch) return;
+      input.dataset.composeWatch = "1";
+      input.addEventListener("compositionstart", () => {
+        this.composing = true;
+      });
+      const done = () => {
+        this.composing = false;
+      };
+      input.addEventListener("compositionend", done);
+      input.addEventListener("blur", done);
+    }
+    /** 发完消息把光标还给输入框（只在它本来就拿着焦点时调用） */
+    focusComposer() {
+      const input = this.shadow.getElementById("phone-composer");
+      if (!input || this.composing || this.disposed) return;
+      if (this.shadow.activeElement !== input) input.focus();
+      try {
+        input.setSelectionRange(input.value.length, input.value.length);
+      } catch {
+      }
     }
     homeView() {
       const s = this.data, world = storyFor(s, this.snapshot), count = unreadCount(s), active = s.activePlan ? s.plans.find((p) => p.id === s.activePlan.id) : null, ht = arcHomeTitle(s, active);
@@ -554,6 +628,11 @@
       }
     }
     act(action, id2 = "", target = null) {
+      if ((action === "send" || action === "queue") && this.composing) {
+        // 输入法还在拼字：这时候发送会把半截字发出去、也会打断候选框
+        this.notify("输入法还在拼字：先选好字，再点发送。", "info");
+        return;
+      }
       if (action === "pick-all" || action === "pick-none" || action === "pick-present") {
         const want = action === "pick-present" ? new Set(String(id2).split(",")) : null;
         for (const box of this.shadow.getElementById("modals").querySelectorAll("input[type=checkbox][name=members]:not(:disabled)")) {
