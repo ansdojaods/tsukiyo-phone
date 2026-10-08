@@ -1,4 +1,4 @@
-/* 月夜来信 · 小手机 v2.9.6（私信输入法修复：输入框不再被重绘打断 · 拼字中不误发 · 手机端回车换行、电脑回车发送 · 发送后焦点留在输入框）升级前备份；自动同步不会逐次要求审批。 */
+/* 月夜来信 · 小手机 v2.9.7（代码优化：召回正文条目上限生效 · 测活支持未保存草稿 · 清理死代码 · 测试版本号统一读取 package.json）升级前备份；自动同步不会逐次要求审批。 */
 var TSUKIYO_PRESET = /*@@PRESET@@*/null/*@@END@@*/;
 var TsukiyoPhoneBundle = (() => {
   var PRESET = typeof TSUKIYO_PRESET === "object" && TSUKIYO_PRESET && Array.isArray(TSUKIYO_PRESET.contacts) ? TSUKIYO_PRESET : null;

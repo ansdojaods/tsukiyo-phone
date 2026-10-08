@@ -655,7 +655,6 @@
         return;
       }
       return this.perform(() => {
-        const free = ["go", "back", "refresh", "stop", "theme", "edit-api", "duplicate-api", "delete-api", "test-api", "models-draft", "export-api", "import-api"];
         return handleAction(this, action, id2, target);
       });
     }

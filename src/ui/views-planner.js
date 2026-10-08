@@ -1,8 +1,4 @@
   // src/ui/views-planner.js
-  function planCard(ui, p, active) {
-    const s = ui.data;
-    return `<article class="card plan-card"><div class="plan-number">${e(p.tone || "日常")} · ${p.beats.length} 个留白的片段 ${active ? tag("已采用") : tag({ candidate: "待选择", paused: "已暂停", completed: "已收束", cancelled: "已取消" }[p.status] || p.status)}</div><h3 class="plan-title">${e(p.title)}</h3><p class="muted">${e(p.summary)}</p><div class="plan-members">${p.members.slice(0, 4).map((id2) => avatar(s.contacts.find((c) => c.id === id2), "small")).join("")}<span>${p.members.length ? e(p.members.map((id2) => contactName(s, id2)).join("、")) : "独自的小安排"}</span></div><div class="buttons">${button("看看这条方向 " + icon("arrow", 13), "plan-detail", p.id, active ? "primary" : "")}${!active && ["candidate", "paused"].includes(p.status) ? button("采用", "adopt-plan", p.id, "primary") : ""}${button("删除", "delete-plan", p.id, "danger")}</div></article>`;
-  }
   function planDetailView(ui) {
     const s = ui.data, p = s.plans.find((p2) => p2.id === ui.route.id);
     if (!p) return empty("这条方向不在当前分支");

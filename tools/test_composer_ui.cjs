@@ -13,7 +13,7 @@ const path = require("path");
 const A = require("node:assert/strict");
 const { JSDOM } = require("jsdom");
 
-let code = fs.readFileSync(path.join(__dirname, "..", "dist", "tsukiyo-phone-v2.9.6.js"), "utf8").replace(/TsukiyoPhoneBundle\.start\([^)]*\);?\s*$/, "");
+let code = fs.readFileSync(require("./lib/dist.cjs").distFile(), "utf8").replace(/TsukiyoPhoneBundle\.start\([^)]*\);?\s*$/, "");
 code = code.replace(
   "return __toCommonJS(index_exports);",
   "__export(index_exports, { addContact: () => addContact, ensureThread: () => ensureThread });\n  return __toCommonJS(index_exports);",

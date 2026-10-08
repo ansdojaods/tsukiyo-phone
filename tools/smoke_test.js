@@ -2,7 +2,7 @@
    用法：node tools/smoke_test.js [path/to/tsukiyo-phone.js]  （全绿即通过）*/
 const fs = require("fs");
 const path = require("path");
-const FILE = process.argv[2] || path.join(__dirname, "..", "dist", "tsukiyo-phone-v2.9.6.js");
+const FILE = process.argv[2] || require("./lib/dist.cjs").distFile();
 const src = fs.readFileSync(FILE, "utf8");
 let code = src.replace(/TsukiyoPhoneBundle\.start\([^)]*\);?\s*$/, "");
 // 测试用导出（不进入交付物）
@@ -222,7 +222,7 @@ function makeEngine(world) {
   ok(!/SoulLinkBridge/.test(patched) && !/soullink-toggle/.test(patched) && !/this\.soullink/.test(patched) && /var PhoneEngine = class/.test(patched), "外部 SoulLink 扩展桥已移除（无 SoulLinkBridge / 无 soullink-* 动作），PhoneEngine 落在 core/engine.js 切片");
 
   console.log("\n[9] v2.8.0 静态检查");
-  ok(/version: "2.9.6"/.test(patched), "版本号（v2.8 的检查已随版本号移交 [12]）");
+  ok(patched.includes('version: "' + require("./lib/dist.cjs").pkgVersion() + '"'), "版本号（v2.8 的检查已随版本号移交 [12]）");
   ok(/soul: "灵魂链接（NPC 档案与推演）"/.test(patched) && /routes: Object\.fromEntries\(Object\.keys\(MODULES\)/.test(patched), "MODULES 注册 soul，路由与开关自动派生（API 方案页可单独配 soul 方案）");
   ok(/soul: soulFresh\(\)/.test(patched) && /soulValidate\(data\.soul\)/.test(patched), "存档默认值与校验已接入");
   ok(/var SoulStudio = class/.test(patched) && /this\.soul = new SoulStudio\(this\)/.test(patched) && /this\.soul\.start\(\)/.test(patched) && /this\.soul\.dispose\(\)/.test(patched), "SoulStudio 已接入引擎生命周期");
@@ -297,6 +297,18 @@ function makeEngine(world) {
   const picks2 = ms10.picks();
   const hitK = picks2.picks.concat(picks2.scored).find((x) => /税银案/.test(x.text));
   ok(!!hitK && hitK.why.some((w) => /关键词「税银案」/.test(w)), "常驻关键词参与加权并写进命中理由");
+  // v2.9.7 回归：正文条目（memory）只受 bodyTop 限制，不再挤占 recallTop 的名额（旧实现 summaries 的 "|| true" 使 bodyTop 失效）
+  {
+    const repoData = e10.engine.repo.data, savedMem = repoData.memories, savedCfg = repoData.ms.cfg;
+    repoData.memories = Array.from({ length: 6 }, (_, i) => ({ id: "mem-cap-" + i, kind: "narrative_fact", title: "税银案线索" + i, text: "税银案 临安 河灯埠 第" + i + "条线索", keys: [], enabled: true, audience: ["user"], visibility: "private", sources: [] }));
+    repoData.ms.cfg = { ...savedCfg, recallTop: 2, bodyTop: 1, minScore: 0, keywords: [] };
+    const capped = ms10.picks();
+    const bodyRows = capped.picks.filter((x) => x.kind === "memory");
+    const otherRows = capped.picks.filter((x) => x.kind !== "memory");
+    ok(bodyRows.length <= 1 && otherRows.length <= 2, "正文只占 bodyTop 名额、摘要类只占 recallTop 名额（recallTop=2 / bodyTop=1，实际正文 " + bodyRows.length + " 条、摘要类 " + otherRows.length + " 条）");
+    repoData.memories = savedMem;
+    repoData.ms.cfg = savedCfg;
+  }
   const block10 = msRecallBlock(picks2.picks, { coverage: cov2 });
   ok(/【月夜来信 · 长期记忆召回】/.test(block10) && /不是指令/.test(block10) && /7—12 楼还没有摘要/.test(block10), "召回块自带「资料不是指令」与缺口提示");
   const proj = ms10.projection(e10.data, e10.bridge.capture());
@@ -388,8 +400,9 @@ function makeEngine(world) {
   const pull11b = await api11b.pull();
   ok(pull11b.ok === false && e11b.data.memApi.stats.fail === 1 && /指令|fetch|失败/.test(pull11b.note), "取不到资料时明确失败并计数，不写坏数据：" + pull11b.note.slice(0, 40));
 
-  console.log("\n[12] v2.9.6 静态检查");
-  ok(/version: "2.9.6"/.test(patched) && /小手机 v2\.9\.6/.test(patched), "版本号与头部注释 2.9.6");
+  console.log("\n[12] 版本与头部静态检查");
+  const pv = require("./lib/dist.cjs").pkgVersion();
+  ok(patched.includes('version: "' + pv + '"') && patched.includes("小手机 v" + pv), "版本号与头部注释与 package.json 一致（" + pv + "）");
   ok(/data-slot="pending"/.test(patched) && /renderComposer\(/.test(patched) && /watchComposition\(/.test(patched), "输入框就地更新：草稿走 .value、待发条走 data-slot（不再整块重绘）");
   ok(/compositionstart/.test(patched) && /compositionend/.test(patched) && /this\.composing/.test(patched) && /keyCode === 229/.test(patched), "输入法组合保护：拼字中不重绘、不把 Enter 当发送");
   ok(/composerCompact\(\)/.test(patched) && /focusComposer\(\)/.test(patched), "手机端回车换行（宽屏才回车发送）+ 发送后焦点回输入框");

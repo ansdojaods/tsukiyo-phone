@@ -17,7 +17,6 @@
       });
       if (t) return { module: "memory", threadId: t.id };
     }
-    const candidates = data.plans.filter((p) => p.status === "candidate" && (!world.date || !p.baseDate || world.date <= addDays(p.baseDate, 6)));
     const everyN = a.proactiveEvery > 0 ? a.proactiveEvery : 1;
     const gapN = a.proactiveMinutes > 0 ? a.proactiveMinutes * 6e4 : 6e4;
     const unreadCap = Number.isInteger(a.proactiveUnreadCap) ? a.proactiveUnreadCap : 3;

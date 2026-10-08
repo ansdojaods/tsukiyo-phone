@@ -1,13 +1,25 @@
-# 月夜来信 · 小手机 v2.9.6（TSUKIYO PHONE）
+# 月夜来信 · 小手机 v2.9.7（TSUKIYO PHONE）
 
 > 一个跑在 **SillyTavern + 酒馆助手（Tavern Helper）** 里的“拟真社交与生活手机”：私聊/群聊、主动来信、朋友圈、日记与恋爱心迹、记忆世界书、剧情规划与工作台、可编辑视觉资料库（AVS）、世界书工坊、**内置灵魂链接（NPC 档案 + 发送前角色推演）**、**记忆工作台（分层摘要 / 状态账本 / 本地召回 / 楼层收纳）**、**楼层记忆归属互斥（交给百宝月夜书时不重复生成）**、**百宝月夜书公开 API 联动**、柏宝书联动。
 >
 > 本仓库是 **单文件脚本 + 可编辑模块源码 + 构建/测试工具** 的完整分发版；脚本为原创实现，**不含任何用户 API 密钥或聊天存档**。
 
-- 版本：`2.9.6`
-- 本轮基线：仓库 v2.9.4 → v2.9.5（归属联动）→ v2.9.6（私信输入法）；本地修复，尚未推送。
+- 版本：`2.9.7`（版本号唯一来源：`package.json`）
+- 本轮基线：v2.9.6（私信输入法）→ v2.9.7（代码优化 + 测活草稿 + 召回修复）；本地修改，尚未推送。
 - 产物哈希：独立版 `0a9366b6423d97c71e92762e5187f6b7ec07306ccfe760519816fefe9c2b0c68`；54 个源码切片哈希见 `src/manifest.json`。
-- 测试：119 项冒烟 + 26 项归属联动专项 + 16 项跨仓库契约 + 29 个回归 + 26 个安全场景；既有 DOM 流程 + 8 组输入法专项。宿主/API 为模拟，不代表真实酒馆端到端结果。
+- 测试：120 项冒烟 + 26 项归属联动专项 + 16 项跨仓库契约 + 29 个回归 + 26 个安全场景 + 8 项安全 UI + 13 项测活 UI；既有 DOM 流程 + 8 组输入法专项。宿主/API 为模拟，不代表真实酒馆端到端结果。
+
+## v2.9.7 代码优化与修复
+
+这一版是对两个仓库的全量检查后做的一轮优化（静态分析 + 逐处核对），没有改变任何用户可见的功能约定。
+
+- **修复：记忆召回的正文上限不生效**。`picks()` 里 `summaries` 的过滤条件是 `r.kind !== "memory" || true`，结果恒真，正文条目会挤占摘要类的 `recallTop` 名额，`bodyTop` 形同虚设。现在摘要 / 账本 / 外部资料只受 `recallTop` 限制，记忆正文只受 `bodyTop` 限制。新增回归用例（`tools/smoke_test.js`）：旧包上「正文 2 条、摘要 0 条」，修复后「正文 1 条、摘要 2 条」。
+- **修复：API 方案编辑页测活**（v2.9.6 补丁已带入）：测活使用表单当前的模型 / 地址 / 密钥，不必先保存；草稿测试不写存档。
+- **清理死代码**：删除从未被调用的旧手机导入模块 `services/legacy.js`（入口 `oldPhone()` 已在 2.9.2 删除）、`ui/views-planner.js` 里无人使用的 `planCard`、`scheduler.js` 里的占位变量，以及若干未用变量与参数。仅删除确认无引用的代码；存档字段（`legacyArchive`、`migration`）保留，旧存档不受影响。
+- **版本号单一来源**：版本号只在 `package.json` 维护。`release.js` 与所有测试通过 `tools/lib/dist.cjs` 读取，不再需要在测试里逐个改文件名。
+- **模块索引自动同步**：新增 `tools/sync-module-index.js`，按 manifest 精确回填 `docs/模块索引.md` 的行号、切片数和字符数。`release.js` 会自动调用，`npm test` 里的 `--check` 会在文档过期时失败。
+
+完整说明见 [v2.9.7 优化说明](docs/v2.9.7-优化说明.md)。
 
 ## v2.9.6 私信输入法修复
 
@@ -64,9 +76,9 @@
 ```
 tsukiyo-phone/
 ├─ dist/                                 ← 发行文件（直接拿去用）
-│  ├─ tsukiyo-phone-v2.9.4.js                   独立版脚本（酒馆助手 → 脚本库 → 新建/粘贴）
-│  ├─ tsukiyo-phone-v2.9.4.embedded.js          卡内嵌版脚本（大奉打更人卡内预置人物表，预设源见 tools/embedded-preset.json）
-│  └─ 月夜来信小手机_酒馆助手导入版_v2.9.4_剧情中心.json   酒馆助手“导入”用（推荐）
+│  ├─ tsukiyo-phone-v2.9.7.js                   独立版脚本（酒馆助手 → 脚本库 → 新建/粘贴）
+│  ├─ tsukiyo-phone-v2.9.7.embedded.js          卡内嵌版脚本（大奉打更人卡内预置人物表，预设源见 tools/embedded-preset.json）
+│  └─ 月夜来信小手机_酒馆助手导入版_v2.9.7_剧情中心.json   酒馆助手“导入”用（推荐）
 ├─ src/                                  ← 模块源码（由发布版逐字节切片，按 manifest 顺序拼接即得发布版）
 │  ├─ _prelude.js                              文件头 / TSUKIYO_PRESET 注入位 / IIFE 与打包胶水
 │  ├─ core/ host/ services/ ui/ arc/ avs/ studio/ center/ content/
@@ -81,8 +93,11 @@ tsukiyo-phone/
 │  ├─ release.js                               推荐入口：重算 manifest → 独立版 → 卡内嵌版 → 酒馆助手导入版 JSON
 │  ├─ build.js                                 只把 src/ 拼回单文件（给临时实验用）
 │  ├─ embedded-preset.json                     卡内嵌版用的预置人物/开场数据（大奉打更人）
-│  ├─ smoke_test.js                            115 项逻辑冒烟测试（桩环境，全绿即通过）
-│  └─ smoke_delegate.js                        16 项「楼层记忆归属互斥」专项测试
+│  ├─ smoke_test.js                            120 项逻辑冒烟测试（桩环境，全绿即通过）
+│  ├─ smoke_delegate.js                        26 项「楼层记忆归属互斥」专项测试
+│  ├─ test_api_draft_ui.cjs                    13 项 API 方案测活草稿（真实 DOM）
+│  ├─ sync-module-index.js                     模块索引同步（release 自动调用；npm test 里 --check）
+│  └─ lib/dist.cjs                             版本号与发布件路径的唯一读取入口（package.json）
 └─ docs/
    ├─ v2.9.2_整改说明.md                         本次清理与修复的来龙去脉（含 SoulLink 重复问题）
    ├─ 小手机v2.9.1_优化说明与参考仓库对照.md        历史文档：v2.7 / v2.8 / v2.9 的逐条优化说明
@@ -95,17 +110,17 @@ tsukiyo-phone/
 
 **方式 A：酒馆助手导入（推荐）**
 
-1. 打开 `dist/月夜来信小手机_酒馆助手导入版_v2.9.4_剧情中心.json`；
+1. 打开 `dist/月夜来信小手机_酒馆助手导入版_v2.9.7_剧情中心.json`；
 2. 在酒馆助手的脚本库中「导入」，或按其中的 `name / content` 新建脚本并粘贴 `content`；
 3. 与旧版覆盖式升级没问题：脚本 id 沿用 `5ac630d9-b12e-53ec-bfd1-c7069b1337e5`，**存档格式向后兼容**（旧存档会自动补默认值，包括 v2.8 的 `soul` 与 v2.9 的 `ms / memApi` 切片）。
 
 **方式 B：直接粘贴脚本**
 
-把 `dist/tsukiyo-phone-v2.9.4.js` 全文粘贴进酒馆助手脚本内容即可（该文件自带 `TsukiyoPhoneBundle.start({mode:'card',source:window});` 启动行）。
+把 `dist/tsukiyo-phone-v2.9.7.js` 全文粘贴进酒馆助手脚本内容即可（该文件自带 `TsukiyoPhoneBundle.start({mode:'card',source:window});` 启动行）。
 
 **方式 C：角色卡内嵌**
 
-卡内嵌版脚本是 `dist/tsukiyo-phone-v2.9.4.embedded.js`（把 `tools/embedded-preset.json` 的预置人物/开场数据注入 `_prelude.js` 的 `TSUKIYO_PRESET` 注入位）。整卡 JSON 请用你自己的角色卡 + 这份脚本体自行打包，卡内 `tavern_helper.scripts` 只替换小手机那一个脚本，其余（MVU / 变量结构 / 状态栏 / 节点路由）与卡正文、开场白、世界书都保持不动。
+卡内嵌版脚本是 `dist/tsukiyo-phone-v2.9.7.embedded.js`（把 `tools/embedded-preset.json` 的预置人物/开场数据注入 `_prelude.js` 的 `TSUKIYO_PRESET` 注入位）。整卡 JSON 请用你自己的角色卡 + 这份脚本体自行打包，卡内 `tavern_helper.scripts` 只替换小手机那一个脚本，其余（MVU / 变量结构 / 状态栏 / 节点路由）与卡正文、开场白、世界书都保持不动。
 
 **升级与回滚**：直接换文件即可；要回滚就用你原来的 v2.5.1 脚本覆盖回来，存档不会丢（v2.7 / v2.8 / v2.9 只是多了字段）。
 
@@ -193,9 +208,10 @@ tsukiyo-phone/
 node tools/release.js                     # → 重算 manifest + dist 三个发布件（推荐）
 node tools/build.js /tmp/my-build.js      # 只想快速拼一份的话用它（不改 manifest）
 # 3) 逻辑体检（115 + 16 项，桩环境加载整包，不需要酒馆）
-node tools/smoke_test.js                  # 默认读取 dist/tsukiyo-phone-v<版本>.js
+node tools/smoke_test.js                  # 默认读取 dist/tsukiyo-phone-v<package.json 版本>.js
 node tools/smoke_test.js /tmp/my-build.js # 也可以指定刚构建出来的文件
-node tools/smoke_delegate.js              # 楼层记忆归属互斥专项（16 项）
+node tools/smoke_delegate.js              # 楼层记忆归属互斥专项（26 项）
+node tools/test_api_draft_ui.cjs          # API 方案测活草稿（13 项，真实 DOM）
 node tools/test_review.js                 # 29 个既有回归场景
 node tools/test_safety.cjs                # 26 个新增安全场景
 npm ci                                  # 仅 DOM 测试需要 jsdom

@@ -133,6 +133,26 @@
       this.persist(next);
       return profile;
     }
+    // 编辑页「测活」用：把表单当前填写的值套在已保存方案上，得到一份**不落盘**的草稿。
+    // 校验与保存时相同；密钥优先取表单里新输入的，没有则沿用已保存的（清除勾选时为空）。
+    draftProfile(raw, savedId) {
+      const base = this.data.profiles.find((p) => p.id === savedId);
+      assert(base, "方案不存在，请先保存");
+      const r = raw && typeof raw === "object" ? raw : {};
+      const draft = {
+        ...clone(base),
+        name: text(r.name, 40) || base.name,
+        transport: r.transport || base.transport,
+        url: text(r.url ?? base.url, 500).replace(/\/+$/, ""),
+        model: text(r.model ?? base.model, 120),
+        temperature: clamp(r.temperature, 0, 2, base.temperature),
+        maxTokens: Math.round(clamp(r.maxTokens, 128, 16e3, base.maxTokens)),
+        testPrompt: text(r.testPrompt ?? base.testPrompt ?? "", 2e3)
+      };
+      validateProfile(draft);
+      const key = r.clearKey === true ? "" : text(r.key, 5e3) || this.key(base.id);
+      return { ...draft, key };
+    }
     duplicate(profileId) {
       const p = this.data.profiles.find((p2) => p2.id === profileId);
       assert(p && p.id !== "tavern", "请选择一个自定义方案");

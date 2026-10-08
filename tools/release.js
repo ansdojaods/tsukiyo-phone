@@ -18,7 +18,7 @@ const path = require("path");
 const crypto = require("crypto");
 
 const root = path.join(__dirname, "..");
-const pkg = { version: "2.9.6", name: "tsukiyo-phone" };
+const pkg = { version: require("./lib/dist.cjs").pkgVersion(), name: "tsukiyo-phone" };
 const manifestPath = path.join(root, "src", "manifest.json");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 const sha = (s) => crypto.createHash("sha256").update(s, "utf8").digest("hex");
@@ -63,7 +63,7 @@ if (fs.existsSync(presetFile)) {
 // ---- 3. 酒馆助手导入版 JSON（content = 独立版全文） ----
 // Stable metadata: clean builds do not depend on a previous dist file.
 const meta = { type: "script", enabled: true, id: "5ac630d9-b12e-53ec-bfd1-c7069b1337e5", button: { enabled: false, buttons: [] }, data: {}, export_with: { data: true, button: true } };
-const newInfo = "v2.9.6：私信输入法修复 —— 输入框不再被整块重绘打断（焦点、光标、输入法拼字都保住），拼字过程中不会误发，发送后光标留在输入框；手机/平板回车换行，电脑上仍是回车发送、Shift+回车换行。先备份，停用旧脚本。";
+const newInfo = "v2.9.7：代码优化 —— 记忆召回的正文条目上限生效；API 方案编辑页测活改用表单当前的模型 / 地址 / 密钥（无需先保存，草稿不写存档）；清理未使用代码与旧手机导入残留；版本号与发布件路径统一从 package.json 读取。v2.9.6：私信输入法修复 —— 输入框不再被整块重绘打断（焦点、光标、输入法拼字都保住），拼字过程中不会误发，发送后光标留在输入框；手机/平板回车换行，电脑上仍是回车发送、Shift+回车换行。先备份，停用旧脚本。";
 const payload = {
   ...meta,
   type: "script",
@@ -84,3 +84,6 @@ for (const f of fs.readdirSync(distDir)) {
     console.log("· 已移除旧产物 dist/" + f);
   }
 }
+
+// ---- 5. 同步模块索引（行号 / 切片数随发布件更新，避免文档漂移） ----
+require("./sync-module-index.js");

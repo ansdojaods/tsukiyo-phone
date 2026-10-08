@@ -9,12 +9,12 @@
  * 对照实现：`ST-BaiBai-Book-Tsukiyo/tests/memory-editor/contract.test.cjs`。
  * 默认路径找不到柏宝书仓库时，跨仓库夹具比对会自动跳过（不失败）。
  *
- *   node tools/test_contract.cjs [dist/tsukiyo-phone-v2.9.6.js]
+ *   node tools/test_contract.cjs [dist/tsukiyo-phone-v<版本>.js]
  */
 const fs = require("fs");
 const path = require("path");
 
-const FILE = process.argv[2] || path.join(__dirname, "..", "dist", "tsukiyo-phone-v2.9.6.js");
+const FILE = process.argv[2] || require("./lib/dist.cjs").distFile();
 const src = fs.readFileSync(FILE, "utf8");
 let code = src.replace(/TsukiyoPhoneBundle\.start\([^)]*\);?\s*$/, "");
 code = code.replace(

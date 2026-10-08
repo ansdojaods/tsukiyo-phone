@@ -52,8 +52,7 @@
   function memoryFrom(raw, thread, snapshot2) {
     const x = parseModelJson(raw, 26e3);
     assert(typeof x.summary === "string" && x.summary.length <= 1500 && Array.isArray(x.facts) && x.facts.length <= 8, "记忆结果需要summary与facts");
-    const allowed = /* @__PURE__ */ new Set(["user", ...thread.members]);
-    const facts = x.facts.map((f) => {
+        const facts = x.facts.map((f) => {
       assert(text(f.text, 500) && Array.isArray(f.sourceIds) && f.sourceIds.length > 0 && f.sourceIds.length <= 5, "记忆必须指向已有消息");
       const source = thread.messages.filter((m) => f.sourceIds.includes(m.id));
       assert(source.length === new Set(f.sourceIds).size, "记忆引用了其他会话或不存在的消息");

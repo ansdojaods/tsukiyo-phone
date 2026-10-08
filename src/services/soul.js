@@ -449,7 +449,7 @@
     }
     /** 发送前角色推演：并发调用，产出第一人称独白并注入到指定深度。 */
     async roleplay({ names = null, snap = null, manual = true } = {}) {
-      const s = this.data(), view = this.view();
+      const s = this.data();
       assert(s && this.enabled(), "灵魂链接已关闭");
       const cfg = this.cfg(), roles = this.roles();
       const target = snap || this.eng.repo.snapshot;

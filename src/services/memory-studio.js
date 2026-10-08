@@ -481,8 +481,7 @@
     }
     /** 强制模型挑选检索关键词（可选，手动触发）。 */
     async keywordsNow() {
-      const v = this.view(), snap = this.eng.repo.snapshot;
-      const query = this.queryText(snap, v);
+      const snap = this.eng.repo.snapshot;
       const eng = this.eng;
       return eng.actions.perform("memory", () => ({
         system: rules + "\n" + this.prompt("keywords"),
@@ -610,7 +609,7 @@
     picks(snap = this.eng.repo.snapshot, v = this.view()) {
       const cfg = this.cfg();
       const query = this.queryText(snap, v);
-      const qv = msVector(query), qt = msTokens(query);
+      const qv = msVector(query);
       const boost = (v.cfg.keywords || []).concat(cfg.keywords || []);
       const scored = this.candidates(snap, v).map((row) => {
         const vec = msVector(row.text + " " + row.label);
@@ -630,9 +629,10 @@
         why.push("字数 " + row.text.length);
         return { ...row, score: Math.min(1, score), why };
       }).sort((a2, b) => b.score - a2.score);
-      const summaries = scored.filter((r) => r.kind !== "memory" || true).slice(0, Math.max(0, cfg.recallTop));
+      // 摘要 / 账本 / 外部资料 与 记忆正文 分开计数：recallTop 只限前者，bodyTop 只限后者
+      const summaries = scored.filter((r) => r.kind !== "memory").slice(0, Math.max(0, cfg.recallTop));
       const bodies = scored.filter((r) => r.kind === "memory").slice(0, Math.max(0, cfg.bodyTop));
-      const keep = [...summaries, ...bodies.filter((b) => !summaries.includes(b)).slice(0, cfg.bodyTop)];
+      const keep = [...summaries, ...bodies];
       const filtered = keep.filter((r) => r.score >= cfg.minScore || r.kind === "ledger");
       let used = 0;
       const budget = Math.max(600, cfg.maxChars);

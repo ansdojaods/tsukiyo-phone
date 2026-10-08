@@ -1,18 +1,18 @@
 {
   "generator": "tools/release.js",
-  "version": "2.9.6",
+  "version": "2.9.7",
   "note": "切片为逐字节内容，按 chunks 顺序拼接即为发布版脚本；shas 由 tools/release.js 重算",
-  "sha256": "bf75a08564a1fb37eda925aad9be8d1325962a910f1e857eee0ee94cbd5f3828",
+  "sha256": "e19490e9e54b0bd71247bcec76917273d825c29ca09b063ebdcbb9fdbf796865",
   "chunks": [
     {
       "file": "_prelude.js",
-      "chars": 1143,
-      "sha256": "da676018a610941f01a5a8473639ebb3000e572ed6a05d78232bcf32b145fdcc"
+      "chars": 1146,
+      "sha256": "65fc4aafa719fb57ddcd5faca23ebb2cd605cbd54e21f8c3ae9222c0cccbb10d"
     },
     {
       "file": "index.js",
       "chars": 525,
-      "sha256": "fb31e9f1de922bb90ee7f9d8d9c17998ddcb3a8d606476509f42188dbc12a88d"
+      "sha256": "724b6589e6415533254903eecb6554afbdb5737c06e96765f55728c9031c3d38"
     },
     {
       "file": "core/utils.js",
@@ -76,8 +76,8 @@
     },
     {
       "file": "core/settings.js",
-      "chars": 10876,
-      "sha256": "c8972bb2e77a4d053ae51528b7987b7215aea24f8a9aef88b212e15614a945bf"
+      "chars": 11586,
+      "sha256": "440eaa72e60c44d0b0b0b8aa67789e584836c2c2650d4d613d1055f4789fd461"
     },
     {
       "file": "core/media.js",
@@ -96,8 +96,8 @@
     },
     {
       "file": "services/api-router.js",
-      "chars": 7539,
-      "sha256": "53deac43d4897a0037a4820bbad6831b63d1ce7c9be8b7939d190c7c15f5381f"
+      "chars": 7572,
+      "sha256": "b28dfbf7d2d59f3ce8fb7d1f5a01e6b3f3b81d96fd300d1385ae4e0b25bd92b1"
     },
     {
       "file": "content/kusogaki-extra.js",
@@ -111,8 +111,8 @@
     },
     {
       "file": "services/contracts.js",
-      "chars": 9555,
-      "sha256": "03ef27914116775b0b996bd35a3614dfb6f2e02de6f1affb2b76880aea4f2c9a"
+      "chars": 9336,
+      "sha256": "5b3bf9b03b70079010d892d0e23cbfb43fd3bf5ed0712948255e959220443b1c"
     },
     {
       "file": "services/focus.js",
@@ -126,13 +126,8 @@
     },
     {
       "file": "services/scheduler.js",
-      "chars": 7235,
-      "sha256": "044ca32aa226e6266b87161d1d7f655fa010c71c7c4dc8a8ee7ce1b234180757"
-    },
-    {
-      "file": "services/legacy.js",
-      "chars": 5534,
-      "sha256": "755afec74a6e030d75c1b808de41f872215c15bbd0d0d544de0893b9c431be05"
+      "chars": 6959,
+      "sha256": "d673bb16b70beb4503d22d2d298a5bad886a27e096e6710f1038b15a5e85d3ea"
     },
     {
       "file": "arc/engine.js",
@@ -156,8 +151,8 @@
     },
     {
       "file": "studio/ui.js",
-      "chars": 19090,
-      "sha256": "537eb0c439788d6e98af04cb5cf62e2f815953736f48b7578e8dd068efcdc5d4"
+      "chars": 18947,
+      "sha256": "68a8dff2c757bc2b102ade849729d878d4bd92af04256d87d88d4d2becd470e2"
     },
     {
       "file": "center/core.js",
@@ -171,13 +166,13 @@
     },
     {
       "file": "services/soul.js",
-      "chars": 30250,
-      "sha256": "15d7ebc63878ff601a3418f7c76aca2e7cc26c4ba6764a90ab3f50eb06a46886"
+      "chars": 30230,
+      "sha256": "084196fafc390e7c8c6f2e2ace04f63f037dc35235643fbb4b236716ef3ca4b9"
     },
     {
       "file": "services/memory-studio.js",
-      "chars": 52409,
-      "sha256": "ee584a4c3ae80cb3db41a724edb757ace862f4ab5429313f64319d8cb8e12e99"
+      "chars": 52321,
+      "sha256": "cf2636bae09cd342907b2d5e3b2b037efcb6d709bd4d8a61d654f8ff0dd6c52e"
     },
     {
       "file": "services/memory-api.js",
@@ -221,18 +216,18 @@
     },
     {
       "file": "ui/commands.js",
-      "chars": 134116,
-      "sha256": "003482d496e66834cda2460d013e7d0928305573e92f75a98d86f92d6b16fa2d"
+      "chars": 134709,
+      "sha256": "cae051f9191412263a29cc89dc18dd9b9af96cd31c799ebe5aa0a5a8bb3ecb0a"
     },
     {
       "file": "arc/ui.js",
-      "chars": 25491,
-      "sha256": "3dd2ffa9e6666f458c7b872643f350aba310f70f7ffd9689d70629a62f555fb8"
+      "chars": 25138,
+      "sha256": "931e2ae2ac2b63d0e8521aec7f6717c4171d9213d0062354822f0d1a5798daf3"
     },
     {
       "file": "ui/views-planner.js",
-      "chars": 12011,
-      "sha256": "6f99a4f5bdb5ae07922ccc0e9d26fe5e239ec3d45fdfea26dd4d091661f99a3f"
+      "chars": 11110,
+      "sha256": "6f1c9815a5d737303660f43cbeb6320d9ed38b706a31186fabece89faef4d760"
     },
     {
       "file": "ui/views-memory-studio.js",
@@ -251,8 +246,8 @@
     },
     {
       "file": "ui/views-settings.js",
-      "chars": 26367,
-      "sha256": "b4665dabe906078d116c58a8515b27ba6f4c9492524b00728ebf5d4ed5b0c8cb"
+      "chars": 26344,
+      "sha256": "f831ccb8f610463d21dfb43261bdefd513271730d2d9c86cafa17b27603c3ce3"
     },
     {
       "file": "services/review.js",
@@ -266,8 +261,8 @@
     },
     {
       "file": "ui/renderer.js",
-      "chars": 38293,
-      "sha256": "e316033ce9df86d79ab4734830e582df0544aa98b75a1adeaf3edbf00eb40c95"
+      "chars": 38129,
+      "sha256": "6c0d8eb9d53c536d3f48ac802c8ee4e7963e230c1d30d5323bbedc6ef661ba18"
     },
     {
       "file": "index-2.js",

@@ -10,7 +10,7 @@
   }
   function studioWho(s,id2){return s.contacts.find(c=>c.id===id2)?.name||"已移除人物";}
   function studioPanelView(ui) {
-    const eng=ui.engine,s=ui.data,st=studioData(s),snap=ui.snapshot,tab=ui.studioTab||"events";
+    const s=ui.data,st=studioData(s),snap=ui.snapshot,tab=ui.studioTab||"events";
     let body="";
     if(tab==="events"){
       const a=st.active,valid=studioValid(a,snap)&&centerLinkValid(s,a?.event);

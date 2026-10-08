@@ -30,7 +30,7 @@
     return `<div class="card"><h3 style="margin:0 0 6px">灵魂链接（内置）</h3><p class="tiny muted">给小手机里的每个角色维护一份长期档案（性格 / 世界观 / 家庭背景 / 人际关系 / 记忆），用你自己的 API 方案做增量更新与精编；发送前可为在场角色并发推演内心状态，注入到正文提示里。档案还能一键写成世界书条目（世界书工坊的「灵魂链接档案」）。</p>${switchRow("启用灵魂链接", "档案存在手机存档里，随备份与云同步一起走；不依赖任何外部扩展", "soul-toggle", v.enabled)}${info.enabled ? settingLink("打开灵魂链接（" + info.characters + " 人 · " + info.entries + " 条）", "go", "heart", "档案 / 推演 / 名单导入导出", "soul") : ""}<p class="form-note">当前：档案自动维护${v.auto?.enabled ? "开" : "关"} · 角色推演${v.roleplay?.enabled ? "开（" + modeLabel + "）" : "关"}${info.lastError ? " · 上次问题：" + e(info.lastError) : ""}</p></div>`;
   }
   function soulRow(ui, row) {
-    const soul = ui.engine.soul, n = soulEntryCount(row);
+    const n = soulEntryCount(row);
     return `<div class="card"><div style="display:flex;align-items:center;gap:10px"><b>${e(row.name)}</b>${row.aliases?.length ? tag(row.aliases.join(" / "), "gold") : ""}${tag(n + " 条")}${row.updatedAt ? tag("更新于 " + autoAgo(row.updatedAt)) : ""}</div><div class="buttons">${button("档案", "review-soul-open", row.name, "primary")}${button("更新档案", "soul-analyze", row.name)}${button("精编", "soul-condense", row.name)}${button("删除", "soul-char-del", row.name, "danger")}</div></div>`;
   }
   function soulView(ui) {
@@ -49,7 +49,7 @@
     return `<div class="pad">${head}${cfgCard}${autoCard}${listCard}${presetCard}${histCard}${hint("与「记忆模块 / 记忆世界书」的分工：灵魂链接管的是“这个角色本身是谁、记得什么”，记忆模块管的是“发生过的事、尚未了结的约定”。两者可以同时开，但同一段内容不要两边都注入。")}</div>`;
   }
   function soulCharView(ui) {
-    const s = ui.data, soul = ui.engine.soul, v = soulData(s), name = ui.route.id;
+    const s = ui.data, v = soulData(s), name = ui.route.id;
     const row = v.roster[name];
     if (!row) return empty("角色不在名单里", "可能已被删除。", "heart") + button("返回名单", "go", "soul", "primary");
     const total = soulEntryCount(row);
@@ -74,7 +74,7 @@
   }
   function apiEditorView(ui) {
     const current = ui.engine.settings.data.profiles.find((p2) => p2.id === ui.route.id), p = current || { name: "", type: "openai", transport: "helper", url: "", model: "", temperature: 0.8, maxTokens: 3200, rememberKey: false };
-    return `<div class="pad"><form data-form="api"><input type="hidden" name="id" value="${e(current?.id || "")}">${field("方案名称", "name", p.name, { placeholder: "例如：日常聊天 / 长线规划", required: true, max: 40 })}${select("请求路径", "transport", [["helper", "通过酒馆助手代理"], ["direct", "浏览器直连（需要CORS支持）"]], p.transport)}${field("OpenAI兼容基础地址", "url", p.url, { placeholder: "https://你的接口地址/v1", required: true, max: 500 })}${field("API密钥", "key", "", { type: "password", placeholder: ui.engine.settings.key(p.id) ? "已设置；留空保留，勾选下方可清除" : "仅发给你指定的API，不进备份", max: 5e3 })}${checkbox("在本机记住密钥（明文浏览器存储，并非加密保险箱）", "rememberKey", p.rememberKey)}${current && ui.engine.settings.key(p.id) ? checkbox("清除这份方案已保存的密钥", "clearKey", false) : ""}${field("模型名称", "model", p.model, { placeholder: "填写服务商给出的完整模型名", required: true, max: 120 })}<div class="buttons">${button("读取模型列表", "models-draft")}</div><label class="form-field"><span>测活用语（仅此方案使用）</span><textarea class="field" name="testPrompt" rows="2" maxlength="2000" placeholder="留空则发送“请回复 OK。”">${e(p.testPrompt || "")}</textarea></label><div class="buttons">${current && current.id !== "tavern" ? button("用上面的用语测活", "test-api", current.id, "primary") : ""}</div>${current ? hint("测活按钮使用已保存的用语；改动后请先保存。") : hint("新方案保存后即可单独测活。")}<div class="two-cols">${field("温度 0—2", "temperature", p.temperature, { type: "number" })}${field("最大输出 128—16000", "maxTokens", p.maxTokens, { type: "number" })}</div>${hint("不会在导出的方案、手机备份或源码包里附带配置密钥。普通聊天文本若由你手动写入秘密，则仍属于聊天内容。")}<button class="btn primary wide" type="submit">保存这份方案</button></form></div>`;
+    return `<div class="pad"><form data-form="api"><input type="hidden" name="id" value="${e(current?.id || "")}">${field("方案名称", "name", p.name, { placeholder: "例如：日常聊天 / 长线规划", required: true, max: 40 })}${select("请求路径", "transport", [["helper", "通过酒馆助手代理"], ["direct", "浏览器直连（需要CORS支持）"]], p.transport)}${field("OpenAI兼容基础地址", "url", p.url, { placeholder: "https://你的接口地址/v1", required: true, max: 500 })}${field("API密钥", "key", "", { type: "password", placeholder: ui.engine.settings.key(p.id) ? "已设置；留空保留，勾选下方可清除" : "仅发给你指定的API，不进备份", max: 5e3 })}${checkbox("在本机记住密钥（明文浏览器存储，并非加密保险箱）", "rememberKey", p.rememberKey)}${current && ui.engine.settings.key(p.id) ? checkbox("清除这份方案已保存的密钥", "clearKey", false) : ""}${field("模型名称", "model", p.model, { placeholder: "填写服务商给出的完整模型名", required: true, max: 120 })}<div class="buttons">${button("读取模型列表", "models-draft")}</div><label class="form-field"><span>测活用语（仅此方案使用）</span><textarea class="field" name="testPrompt" rows="2" maxlength="2000" placeholder="留空则发送“请回复 OK。”">${e(p.testPrompt || "")}</textarea></label><div class="buttons">${current && current.id !== "tavern" ? button("用上面的用语测活", "test-api", current.id, "primary") : ""}</div>${current ? hint("测活直接使用这里当前填写的模型、地址、密钥与用语，不必先保存；测试不会改动已保存的方案。") : hint("新方案保存后即可单独测活。")}<div class="two-cols">${field("温度 0—2", "temperature", p.temperature, { type: "number" })}${field("最大输出 128—16000", "maxTokens", p.maxTokens, { type: "number" })}</div>${hint("不会在导出的方案、手机备份或源码包里附带配置密钥。普通聊天文本若由你手动写入秘密，则仍属于聊天内容。")}<button class="btn primary wide" type="submit">保存这份方案</button></form></div>`;
   }
   function autoAgo(ts) {
     if (!ts) return "—";

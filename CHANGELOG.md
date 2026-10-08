@@ -1,5 +1,23 @@
 # 更新记录（CHANGELOG）
 
+## 2.9.7（代码优化，本地交付）
+
+- **修复 · 记忆召回正文上限**：`memory-studio.js` 的 `picks()` 中 `summaries` 过滤条件为 `r.kind !== "memory" || true`（恒真），正文条目会占用 `recallTop` 名额、`bodyTop` 不生效。现为摘要 / 账本 / 外部资料只受 `recallTop` 限制，正文只受 `bodyTop` 限制；新增冒烟用例（旧包失败、新包通过）。
+- **修复 · API 方案编辑页测活**（见下方 2.9.6 补丁）已包含在本版本中。
+- **清理死代码**：删除 `services/legacy.js`（旧手机导入，入口已于 2.9.2 删除，manifest 同步移除）、`ui/views-planner.js` 的 `planCard`、`scheduler.js` 的未用占位变量，以及若干未用变量（`soul`、`free`、`legacy`、`eng` 等）。存档字段（`legacyArchive`、`migration`）保留。
+- **版本号单一来源**：`package.json`。新增 `tools/lib/dist.cjs`，`release.js` 与全部测试从它读取版本与发布件路径；`package-lock.json`、`src/index.js`、`src/_prelude.js` 的版本已同步到 2.9.7。
+- **模块索引自动同步**：新增 `tools/sync-module-index.js`，按 manifest 精确回填 `docs/模块索引.md` 的行号、切片数、字符数与版本；`release.js` 自动调用，`npm test` 中 `--check` 失败即提示过期。
+- **测试**：`npm test` 与 `npm run test:ui` 全部通过；`test_safety_ui.cjs` 与 `test_api_draft_ui.cjs` 不再写死版本号 / 文件名。
+- 文档：README 与 `docs/v2.9.7-优化说明.md` 已更新。
+
+## 2.9.6 补丁（未发布，已并入 2.9.7）：API 方案编辑页测活改用表单当前值
+
+- **问题**：编辑方案时换了模型（或改了地址 / 密钥）但未保存，点「用上面的用语测活」仍测的是已保存的旧模型。
+- **修复**：测活按表单当前的模型、地址、传输方式、温度/最大输出、密钥（留空沿用已保存的，勾选清除则不带）发请求；无需先保存。
+- **边界**：草稿测活不写入存档、不改 revision、不更新列表里的「上次测活」；结果弹窗标明「未保存草稿」。列表中的测活仍按已保存方案执行。
+- **实现**：`settings.draftProfile()`（校验同保存时）、`router.call(..., { draft })`（错误信息同样脱敏草稿密钥）。
+- 新增 `tools/test_api_draft_ui.cjs`（13 项真实 DOM 用例，并入 `npm run test:ui`）；在旧代码上运行会在「模型取表单值」处失败。
+
 ## 2.9.6（私信输入法修复，本地交付）
 
 - **输入框只在切换会话时重建**：重绘改为就地更新「N 条待发」条（`data-slot="pending"`），不再整块重写 `composer-area`——焦点、光标、输入法拼字不再被发送/回复/后台刷新打断。

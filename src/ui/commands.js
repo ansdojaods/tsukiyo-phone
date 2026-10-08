@@ -1603,28 +1603,37 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
         return;
       }
       case "test-api": {
-        const st = engine.settings, p = st.data.profiles.find((x) => x.id === value);
-        assert(p, "方案不存在，请先保存");
+        const st = engine.settings, saved = st.data.profiles.find((x) => x.id === value);
+        assert(saved, "方案不存在，请先保存");
+        // 编辑页里点测活：用表单「现在」填的模型 / 地址 / 传输方式 / 密钥 / 用语（草稿），不必先保存。
+        // 草稿只用于本次请求，不写入存档；列表里的「上次测活」只记录已保存的方案。
+        const form = ui.route.view === "apiEditor" ? ui.shadow.querySelector('form[data-form="api"]') : null;
+        const fv = form?.isConnected ? ui.formValues(form) : null;
+        const draft = fv ? st.draftProfile(fv, saved.id) : null;
+        const p = draft || saved;
         const pc = st.data.prompt || {}, hasPrompt = !!(pc.enabled && String(pc.text || "").trim());
-        const r = await ui.dialog("测活 · " + p.name, `<p class="tiny muted">${ui.demo ? "演示只说明配置路径，不测试真实网络。" : "只用这份方案配置的模型发一次短请求（可能计费）；不发送人物资料或聊天记录。"}</p><div class="card"><small>${e(p.model || "酒馆当前模型")}${p.url ? " · " + e(p.url) : ""}</small></div><label class="form-field"><span>这份方案专属的测试用语（保存在方案里）</span><textarea class="field" name="phrase" rows="3" maxlength="2000" placeholder="请回复 OK。">${e(p.testPrompt || st.data.ui.testPrompt || "")}</textarea></label>${hasPrompt ? checkbox("同时附带自定义提示词（检查破限/文风是否生效）", "withPrompt", !!st.data.ui.testWithPrompt) : ""}`, { submit: "开始测活" });
+        const r = await ui.dialog("测活 · " + p.name, `<p class="tiny muted">${ui.demo ? "演示只说明配置路径，不测试真实网络。" : "只用这份方案配置的模型发一次短请求（可能计费）；不发送人物资料或聊天记录。"}${draft ? " 当前测试的是表单里的未保存草稿。" : ""}</p><div class="card"><small>${e(p.model || "酒馆当前模型")}${p.url ? " · " + e(p.url) : ""}</small></div><label class="form-field"><span>测试用语</span><textarea class="field" name="phrase" rows="3" maxlength="2000" placeholder="请回复 OK。">${e(p.testPrompt || st.data.ui.testPrompt || "")}</textarea></label>${hasPrompt ? checkbox("同时附带自定义提示词（检查破限/文风是否生效）", "withPrompt", !!st.data.ui.testWithPrompt) : ""}`, { submit: "开始测活" });
         if (!r) return;
         const phrase = String(r.phrase || "").trim() || "请回复 OK。", withPrompt = hasPrompt && !!r.withPrompt;
-        if (p.id !== "tavern" && phrase !== (p.testPrompt || "")) st.saveProfile({ ...p, testPrompt: phrase, key: void 0 });
-        else if (p.id === "tavern" && phrase !== st.data.ui.testPrompt) st.update({ ui: { ...st.data.ui, testPrompt: phrase.slice(0, 2e3) } });
-        if (withPrompt !== !!st.data.ui.testWithPrompt) st.update({ ui: { ...st.data.ui, testWithPrompt: withPrompt } });
-        ui.notify("正在测活「" + p.name + "」…");
+        if (!draft) {
+          // 只有已保存的方案才顺手记住用语与偏好；草稿模式不写存档，免得把未保存的改动一起存下来
+          if (p.id !== "tavern" && phrase !== (p.testPrompt || "")) st.saveProfile({ ...p, testPrompt: phrase, key: void 0 });
+          else if (p.id === "tavern" && phrase !== st.data.ui.testPrompt) st.update({ ui: { ...st.data.ui, testPrompt: phrase.slice(0, 2e3) } });
+          if (withPrompt !== !!st.data.ui.testWithPrompt) st.update({ ui: { ...st.data.ui, testWithPrompt: withPrompt } });
+        }
+        ui.notify("正在测活「" + p.name + "」" + (draft ? "（未保存草稿）" : "") + "…");
         const t0 = Date.now();
         let ok = true, out;
         try {
-          out = engine.bridge.mode === "demo" ? "演示环境：未请求真实 API。" : await engine.router.call("chat", { system: "这是一条用户主动触发的 API 测活请求。请直接、简短地回应用户。", user: phrase }, { profileId: p.id, raw: !withPrompt });
+          out = engine.bridge.mode === "demo" ? "演示环境：未请求真实 API。" : await engine.router.call("chat", { system: "这是一条用户主动触发的 API 测活请求。请直接、简短地回应用户。", user: phrase }, draft ? { draft: { ...draft, id: saved.id }, raw: !withPrompt } : { profileId: p.id, raw: !withPrompt });
           out = text(out, 600);
         } catch (err) {
           ok = false;
           out = String(err?.message || err).slice(0, 300);
         }
         const ms = Date.now() - t0;
-        st.update({ ui: { ...st.data.ui, lastTest: { ...st.data.ui.lastTest || {}, [p.id]: { ok, ms, ts: Date.now() } } } });
-        await ui.dialog("测活结果 · " + (ok ? "可用" : "失败"), `<div class="card"><div class="row-top"><b>${e(p.name)}</b>${tag(ok ? "✓ " + (ms / 1e3).toFixed(1) + "s" : "✗ 失败", ok ? "" : "rose")}</div><small>${e(p.model || "酒馆当前模型")}${withPrompt ? " · 已附带自定义提示词" : ""}</small><p class="copy" style="white-space:pre-wrap">${e(out)}</p></div>`, { choices: [["ok", "关闭", "primary"]] });
+        if (!draft) st.update({ ui: { ...st.data.ui, lastTest: { ...st.data.ui.lastTest || {}, [p.id]: { ok, ms, ts: Date.now() } } } });
+        await ui.dialog("测活结果 · " + (ok ? "可用" : "失败"), `<div class="card"><div class="row-top"><b>${e(p.name)}</b>${tag(ok ? "✓ " + (ms / 1e3).toFixed(1) + "s" : "✗ 失败", ok ? "" : "rose")}</div><small>${e(p.model || "酒馆当前模型")}${withPrompt ? " · 已附带自定义提示词" : ""}${draft ? " · 未保存草稿（存档未改动）" : ""}</small><p class="copy" style="white-space:pre-wrap">${e(out)}</p></div>`, { choices: [["ok", "关闭", "primary"]] });
         return;
       }
       case "models-draft": {
@@ -1744,7 +1753,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
         return;
       }
       case "soul-toggle": {
-        const soul = engine.soul, on = !ui.data.soul.enabled;
+        const on = !ui.data.soul.enabled;
         await change(ui, (s) => {
           s.soul.enabled = on;
           soulData(s).log = [...soulData(s).log || [], { ts: Date.now(), kind: "info", text: on ? "启用灵魂链接（内置）" : "关闭灵魂链接（内置）" }].slice(-200);
@@ -2232,7 +2241,6 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
         return;
       }
       case "ms-shelve-toggle": {
-        const v = ui.data.ms;
         await change(ui, (s) => {
           msData(s).shelve.enabled = !msData(s).shelve.enabled;
         }, "楼层收纳开关");
@@ -2447,7 +2455,7 @@ ${q.contacts}位联系人、${q.threads}个会话、${q.messages}条消息、${q
   }
   async function handleForm(ui, type, values, form) {
     if (type === "api") {
-      const p = ui.engine.settings.saveProfile({ ...values, type: "openai", id: values.id || void 0, temperature: Number(values.temperature), maxTokens: Number(values.maxTokens) });
+      ui.engine.settings.saveProfile({ ...values, type: "openai", id: values.id || void 0, temperature: Number(values.temperature), maxTokens: Number(values.maxTokens) });
       ui.go("api", "", { replace: true });
       ui.notify("方案已保存；现在可以把各模块分配给它。");
       return;

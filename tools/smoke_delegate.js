@@ -7,7 +7,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const FILE = process.argv[2] || path.join(__dirname, "..", "dist", "tsukiyo-phone-v2.9.6.js");
+const FILE = process.argv[2] || require("./lib/dist.cjs").distFile();
 const src = fs.readFileSync(FILE, "utf8");
 let code = src.replace(/TsukiyoPhoneBundle\.start\([^)]*\);?\s*$/, "");
 code = code.replace(
@@ -237,8 +237,8 @@ ok(d2.engine.win.__editorApi.opened === 1, "剪辑台提供了 open()：手机�
 /* ⑦ 静态检查 */
 const patched = src;
 ok(
-  /version: "2\.9\.6"/.test(patched) && /小手机 v2\.9\.6/.test(patched),
-  "版本号与头部注释 2.9.6",
+  patched.includes('version: "' + require("./lib/dist.cjs").pkgVersion() + '"') && patched.includes("小手机 v" + require("./lib/dist.cjs").pkgVersion()),
+  "版本号与头部注释与 package.json 一致",
 );
 ok(
   /delegate: \{ enabled: true, keepPhoneRecall: false/.test(patched) && /this\.assertOwner\(/.test(patched) && /msDelegateCard/.test(patched) && /keepPhoneRecall: false, engine: ""/.test(patched),

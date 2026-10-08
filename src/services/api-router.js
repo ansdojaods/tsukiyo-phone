@@ -11,10 +11,11 @@
       assert(p, "API方案不存在");
       return p;
     }
-    async call(module, { system, user }, { signal, profileId, meta = {}, raw = false } = {}) {
-      if (!profileId && !this.settings.isEnabled(module)) throw moduleOffError(module);
+    async call(module, { system, user }, { signal, profileId, meta = {}, raw = false, draft = null } = {}) {
+      // draft：编辑页的未保存草稿（见 settings.draftProfile），与 profileId 同样跳过模块开关
+      if (!profileId && !draft && !this.settings.isEnabled(module)) throw moduleOffError(module);
       const pc = this.settings.data.prompt || {}, pre = !raw && pc.enabled && String(pc.text || "").trim() ? [String(pc.text).trim()] : [];
-      const p = this.profile(module, profileId), secret = this.settings.key(p.id);
+      const p = draft ? { ...draft } : this.profile(module, profileId), secret = draft ? String(draft.key || "") : this.settings.key(p.id);
       assert(!signal?.aborted, "请求已取消");
       this.lastRequest = { module, profile: p.name, model: p.model || "酒馆当前模型", started: Date.now(), mock: this.bridge.mode === "demo" };
       if (this.bridge.mode === "demo") return demoResponse(module, { system, user, meta, signal });
@@ -62,7 +63,7 @@
         });
       } catch (error) {
         if (controller.signal.aborted) throw Error("已停止或请求超时，原记录和待发内容保留");
-        throw Error(redactError(error, this.settings.secrets()));
+        throw Error(redactError(error, [...this.settings.secrets(), secret]));
       } finally {
         this.controllers.delete(controller);
         clearTimeout(timer);
